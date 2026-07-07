@@ -1,8 +1,8 @@
 FROM openresty/openresty:1.25.3.1-alpine
 
-RUN apk add --no-cache curl git unzip perl \
-    && /usr/local/openresty/bin/opm get fidelilio/lua-resty-maxminddb
-
+RUN apk add --no-cache curl git unzip perl libmaxminddb \
+    && ln -sf /usr/lib/libmaxminddb.so.0 /usr/lib/libmaxminddb.so \
+    && /usr/local/openresty/bin/opm get anjia0532/lua-resty-maxminddb
 RUN mkdir -p /etc/badsector/coraza/rules
 
 COPY lib/ /usr/local/openresty/badsector/lib/

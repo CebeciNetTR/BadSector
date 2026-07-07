@@ -1,10 +1,37 @@
 --[[
   MaxMind DB helper — supports multiple MMDB files (Country + ASN).
+  Uses anjia0532/lua-resty-maxminddb (OPM) profile API.
 ]]
 
 local _M = {}
 
---- Open an MMDB file.
+local mmdb_mod
+local path_profiles = {}
+local profile_counter = 0
+
+local function mod()
+    if not mmdb_mod then
+        mmdb_mod = require("resty.maxminddb")
+    end
+    return mmdb_mod
+end
+
+local function sync_init()
+    local profiles = {}
+    for path, name in pairs(path_profiles) do
+        profiles[name] = path
+    end
+    if next(profiles) == nil then
+        return
+    end
+    local m = mod()
+    local ok, err = pcall(m.init, profiles)
+    if not ok then
+        ngx.log(ngx.ERR, "badsector geoip_db init: ", err)
+    end
+end
+
+--- Open an MMDB file (registers a named profile).
 ---@param path string
 ---@return table|nil db
 ---@return string|nil err
@@ -19,35 +46,16 @@ function _M.open(path)
     end
     f:close()
 
-    local ok, mmdb = pcall(require, "resty.maxminddb")
-    if not ok or not mmdb then
-        return nil, "resty.maxminddb not available"
+    if not path_profiles[path] then
+        profile_counter = profile_counter + 1
+        path_profiles[path] = "p" .. tostring(profile_counter)
+        sync_init()
     end
 
-    if mmdb.open then
-        local db, err = mmdb.open(path)
-        if not db then
-            return nil, err or "open failed"
-        end
-        return db
-    end
-
-    if mmdb.new then
-        local db, err = mmdb.new(path)
-        if not db then
-            return nil, err or "new failed"
-        end
-        return db
-    end
-
-    if not mmdb.inited() then
-        local init_ok, init_err = pcall(mmdb.init, path)
-        if not init_ok then
-            return nil, init_err or "init failed"
-        end
-    end
-
-    return { _singleton = true, _mod = mmdb }
+    return {
+        profile = path_profiles[path],
+        _mod = mod(),
+    }
 end
 
 --- Lookup IP in database.
@@ -59,23 +67,17 @@ function _M.lookup(db, ip)
         return nil
     end
 
-    if db._singleton then
-        return db._mod.lookup(ip)
+    local res, err = db._mod.lookup(ip, nil, db.profile)
+    if not res and err then
+        ngx.log(ngx.DEBUG, "badsector geoip_db lookup: ", err)
     end
-
-    if db.lookup then
-        return db:lookup(ip)
-    end
-
-    return nil
+    return res
 end
 
 --- Close database handle if supported.
 ---@param db table|nil
-function _M.close(db)
-    if db and db.close then
-        pcall(db.close, db)
-    end
+function _M.close(_db)
+    -- profiles stay registered for worker lifetime
 end
 
 return _M
