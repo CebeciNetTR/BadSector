@@ -11,14 +11,6 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "${ROOT}"
 
-# Ensure scripts are executable (git on Windows may not preserve +x).
-for f in "${ROOT}"/scripts/*.sh; do
-  if [ -f "$f" ]; then
-    sed -i 's/\r$//' "$f" 2>/dev/null || true
-    chmod +x "$f" 2>/dev/null || true
-  fi
-done
-
 compose() {
   bash "${ROOT}/scripts/compose.sh" "$@"
 }
@@ -28,7 +20,8 @@ BRANCH="${BADSECTOR_BRANCH:-main}"
 echo "==> Pull ${BRANCH}"
 git fetch origin
 git checkout "${BRANCH}"
-git pull origin "${BRANCH}"
+# Sunucuda chmod/sed ile oluşan izlenen dosya farklarını at; .env gitignore'da kalır.
+git reset --hard "origin/${BRANCH}"
 echo "    $(git log -1 --oneline)"
 
 echo "==> Data dirs + cert layout"
