@@ -43,6 +43,7 @@ services:
       BADSECTOR_DEFAULT_BACKEND_URL: "http://backend:80"
       BADSECTOR_ENGINE_RELOAD_URL: "http://engine:8080/badsector/admin/reload"
       BADSECTOR_ENGINE_ADMIN_TOKEN: "badsector-engine-token"
+      BADSECTOR_GEOIP_PATH: /data/geoip
       BADSECTOR_CERTS_PATH: /data/certs
       BADSECTOR_ACME_EMAIL: ${BADSECTOR_ACME_EMAIL:-}
       BADSECTOR_ACME_STAGING: ${BADSECTOR_ACME_STAGING:-false}
@@ -51,6 +52,7 @@ services:
     volumes:
       - runtime_config:/runtime
       - api_data:/data
+      - ./data/geoip:/data/geoip:ro
       - ./data/certs:/data/certs
     depends_on:
       postgres:
