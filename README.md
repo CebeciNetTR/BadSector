@@ -88,6 +88,8 @@ sudo ./scripts/install-server.sh /opt/badsector
 
 Detaylı rehber: [docs/DEPLOY.md](docs/DEPLOY.md)
 
+**Güncelleme:** değişiklikler repoya push edilir; sunucuda `bash scripts/update-server.sh` (elle patch yok).
+
 ## Quick Start
 
 **Test environment (Docker — Linux/macOS/WSL2):**

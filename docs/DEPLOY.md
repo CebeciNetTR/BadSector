@@ -1,6 +1,14 @@
 # GitHub & Sunucu Kurulumu
 
-BadSector'u GitHub'a yükleyip Linux sunucuda Docker ile çalıştırma rehberi.
+BadSector güncellemeleri **yalnızca git üzerinden** dağıtılır:
+
+1. **Geliştirme** — değişiklikler repoda (Cursor / local)
+2. **GitHub** — `git push origin main`
+3. **Sunucu** — `git pull` + `bash scripts/update-server.sh`
+
+Sunucuda elle dosya düzenleme veya `docker-compose` build argümanlarını kalıcı değiştirme yapmayın; `.env` hariç tüm ürün kodu repodan gelmelidir.
+
+---
 
 ## 1. GitHub'a yükleme (ilk kez)
 
@@ -101,14 +109,14 @@ docker compose up -d --build
 
 ---
 
-## 4. Güncelleme (sunucuda)
-
-Windows’ta değişiklikleri GitHub’a push edin, ardından sunucuda:
+## 4. Güncelleme (sunucuda — tek komut)
 
 ```bash
 cd /opt/badsector
 bash scripts/update-server.sh
 ```
+
+Script sırası: `git pull` → `setup-dev-data.sh` → `fix-certs-layout.sh` (PEM doğrulama) → `haproxy engine api worker ui` rebuild → health kontrol.
 
 Manuel güncelleme:
 
@@ -117,9 +125,19 @@ cd /opt/badsector
 git pull origin main
 bash scripts/setup-dev-data.sh
 bash scripts/fix-certs-layout.sh
-docker-compose build --no-cache haproxy api worker
+docker-compose build --no-cache haproxy engine api worker ui
 docker-compose up -d --build
 docker-compose ps
+```
+
+Windows (push):
+
+```bash
+cd BadSector
+git add -A
+git status
+git commit -m "açıklayıcı mesaj"
+git push origin main
 ```
 
 > Sunucunuzda `docker-compose` (tireli) kullanın. Repo `scripts/compose.sh` ile ikisini de destekler.
@@ -182,7 +200,7 @@ ssh -L 3000:localhost:3000 user@sunucu-ip
 | Port 80 kullanımda | `sudo ss -tlnp \| grep :80` — nginx/apache durdurun |
 | GeoIP eksik | Worker log: `docker compose logs worker` |
 | Sertifika alınamıyor | DNS, port 80, `BADSECTOR_HAPROXY_CONFIG=live`, `bash scripts/fix-certs-layout.sh` |
-| HAProxy Restarting | `docker-compose logs haproxy` — `acme-*.json` certs kökünde olmamalı |
+| HAProxy Restarting | `bash scripts/fix-certs-layout.sh`; geçersiz `data/certs/haproxy/*.pem` silinir/yeniden oluşturulur |
 
 ---
 

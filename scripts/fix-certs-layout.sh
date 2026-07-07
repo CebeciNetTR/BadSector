@@ -51,17 +51,52 @@ shopt -u nullglob
 
 rm -f "${CERTS}/.gitkeep"
 
-has_pem=false
+validate_pem() {
+  local f="$1"
+  [[ -f "${f}" && -s "${f}" ]] || return 1
+  openssl x509 -in "${f}" -noout 2>/dev/null || return 1
+  openssl pkey -in "${f}" -noout 2>/dev/null || return 1
+  return 0
+}
+
+rebuild_pem_from_private() {
+  local base="$1"
+  local crt="${PRIVATE}/${base}.crt"
+  local key="${PRIVATE}/${base}.key"
+  local out="${HAPROXY}/${base}.pem"
+  if [[ -f "${crt}" && -f "${key}" ]]; then
+    cat "${crt}" "${key}" > "${out}"
+    chmod 644 "${out}"
+    echo "Rebuilt ${out} from private/"
+    return 0
+  fi
+  return 1
+}
+
 shopt -s nullglob
 for f in "${HAPROXY}"/*.pem; do
-  if [[ -f "${f}" && -s "${f}" ]]; then
-    has_pem=true
+  base="$(basename "${f}" .pem)"
+  if validate_pem "${f}"; then
+    echo "OK: $(basename "${f}")"
+    continue
+  fi
+  echo "Invalid or empty PEM, fixing: $(basename "${f}")"
+  rm -f "${f}"
+  rebuild_pem_from_private "${base}" || true
+done
+shopt -u nullglob
+
+has_valid_pem=false
+shopt -s nullglob
+for f in "${HAPROXY}"/*.pem; do
+  if validate_pem "${f}"; then
+    has_valid_pem=true
     break
   fi
 done
 shopt -u nullglob
 
-if [[ "${has_pem}" == "false" ]]; then
+if [[ "${has_valid_pem}" == "false" ]]; then
   echo "No .pem in ${HAPROXY}; creating bootstrap temp.pem..."
   tmpcrt="$(mktemp)"
   tmpkey="$(mktemp)"
