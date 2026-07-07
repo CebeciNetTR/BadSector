@@ -34,7 +34,7 @@ func SeedDefault(db *gorm.DB) error {
 		return err
 	}
 
-	stages := db.DefaultPipelineStages(site.ID)
+	stages := DefaultPipelineStages(site.ID)
 
 	return db.Create(&stages).Error
 }
