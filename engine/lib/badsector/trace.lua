@@ -39,7 +39,7 @@ function _M.record(site_id, ctx)
         decision = decision.action,
         status = decision.status,
         duration_ms = math.floor(((ngx.now() - (ctx._start or ngx.now())) * 1000) + 0.5),
-        steps = ctx.trace or {},
+        steps = ctx.trace_steps or {},
     }
 
     local json = cjson.encode(payload)

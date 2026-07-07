@@ -36,7 +36,7 @@ function RequestContext.new(site)
         site = site,
         enrich = {},
         vars = {},
-        trace = {},
+        trace_steps = {},
         decision = nil,
         response = nil,
         _ensure_cache = {},
@@ -109,7 +109,7 @@ function RequestContext:trace(module_name, decision, detail, extra)
         end
     end
 
-    self.trace[#self.trace + 1] = entry
+    self.trace_steps[#self.trace_steps + 1] = entry
 end
 
 --- Record the terminal decision and optional response metadata.
@@ -124,7 +124,7 @@ end
 ---@return string
 function RequestContext:trace_json()
     local cjson = require("cjson.safe")
-    return cjson.encode(self.trace) or "[]"
+    return cjson.encode(self.trace_steps) or "[]"
 end
 
 return RequestContext
