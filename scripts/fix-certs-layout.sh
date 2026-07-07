@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Fix HAProxy cert directory layout (run on server after git pull).
 #
-# HAProxy loads every file in /etc/haproxy/certs/ as TLS material.
-# ACME account JSON must live in data/certs/acme/ — not beside .pem files.
+# HAProxy crt directory loads every file in the root. Keep only combined *.pem there.
+# ACME account JSON -> data/certs/acme/
+# Split .crt/.key     -> data/certs/private/
 #
 # Usage:
 #   cd /opt/badsector && bash scripts/fix-certs-layout.sh
@@ -12,21 +13,29 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 CERTS="${ROOT}/data/certs"
 ACME="${CERTS}/acme"
+PRIVATE="${CERTS}/private"
 
-mkdir -p "${ACME}"
+mkdir -p "${ACME}" "${PRIVATE}"
+
+shopt -s nullglob
 
 # Move legacy ACME account JSON out of HAProxy cert dir.
-shopt -s nullglob
 for f in "${CERTS}"/acme-*.json; do
   echo "Moving $(basename "${f}") -> acme/"
   mv "${f}" "${ACME}/"
 done
+
+# Move split cert/key out of HAProxy root (temp.crt expects temp.crt.key and breaks bind).
+for f in "${CERTS}"/*.crt "${CERTS}"/*.key; do
+  echo "Moving $(basename "${f}") -> private/"
+  mv "${f}" "${PRIVATE}/"
+done
+
 shopt -u nullglob
 
-# Empty placeholder breaks HAProxy directory scan on some setups.
 rm -f "${CERTS}/.gitkeep"
 
-# Bootstrap a temporary cert so live HAProxy can bind :443 before LE issue.
+# Bootstrap a temporary combined PEM so live HAProxy can bind :443 before LE issue.
 has_pem=false
 shopt -s nullglob
 for f in "${CERTS}"/*.pem; do
@@ -39,17 +48,22 @@ shopt -u nullglob
 
 if [[ "${has_pem}" == "false" ]]; then
   echo "No .pem in ${CERTS}; creating temporary bootstrap cert (temp.pem)..."
+  tmpcrt="$(mktemp)"
+  tmpkey="$(mktemp)"
   openssl req -x509 -newkey rsa:2048 \
-    -keyout "${CERTS}/temp.key" \
-    -out "${CERTS}/temp.crt" \
+    -keyout "${tmpkey}" \
+    -out "${tmpcrt}" \
     -days 7 -nodes \
     -subj "/CN=localhost" 2>/dev/null
-  cat "${CERTS}/temp.crt" "${CERTS}/temp.key" > "${CERTS}/temp.pem"
+  cat "${tmpcrt}" "${tmpkey}" > "${CERTS}/temp.pem"
+  rm -f "${tmpcrt}" "${tmpkey}"
   chmod 644 "${CERTS}/temp.pem"
   echo "Created ${CERTS}/temp.pem (remove after real Let's Encrypt cert is issued)"
 fi
 
-echo "Cert layout OK:"
+echo "Cert layout OK (HAProxy root should be *.pem only):"
 ls -la "${CERTS}/" || true
-echo "ACME accounts:"
+echo "private/:"
+ls -la "${PRIVATE}/" 2>/dev/null || true
+echo "acme/:"
 ls -la "${ACME}/" 2>/dev/null || true

@@ -45,8 +45,11 @@ func NewManager(database *gorm.DB, redisURL, certDir, defaultEmail string, stagi
 	if err := os.MkdirAll(certDir, 0o755); err != nil {
 		return nil, err
 	}
-	// ACME account JSON must not live beside HAProxy PEM files (crt dir loads all files).
+	// ACME JSON + split crt/key must not sit beside HAProxy PEM files (crt dir loads all files).
 	if err := os.MkdirAll(filepath.Join(certDir, "acme"), 0o755); err != nil {
+		return nil, err
+	}
+	if err := os.MkdirAll(filepath.Join(certDir, "private"), 0o755); err != nil {
 		return nil, err
 	}
 
@@ -113,9 +116,9 @@ func (m *Manager) RenewDue(ctx context.Context) (int, error) {
 
 func (m *Manager) DeleteFiles(domain string) error {
 	base := sanitizeDomain(domain)
-	for _, name := range []string{base + ".pem", base + ".crt", base + ".key"} {
-		_ = os.Remove(filepath.Join(m.certDir, name))
-	}
+	_ = os.Remove(filepath.Join(m.certDir, base+".pem"))
+	_ = os.Remove(filepath.Join(m.certDir, "private", base+".crt"))
+	_ = os.Remove(filepath.Join(m.certDir, "private", base+".key"))
 	return nil
 }
 
@@ -273,8 +276,12 @@ func (m *Manager) saveUser(user *acmeUser) error {
 
 func (m *Manager) writePEM(domain string, certPEM, keyPEM []byte) error {
 	base := sanitizeDomain(domain)
-	certPath := filepath.Join(m.certDir, base+".crt")
-	keyPath := filepath.Join(m.certDir, base+".key")
+	privateDir := filepath.Join(m.certDir, "private")
+	if err := os.MkdirAll(privateDir, 0o755); err != nil {
+		return err
+	}
+	certPath := filepath.Join(privateDir, base+".crt")
+	keyPath := filepath.Join(privateDir, base+".key")
 	pemPath := filepath.Join(m.certDir, base+".pem")
 
 	if err := os.WriteFile(certPath, certPEM, 0o644); err != nil {

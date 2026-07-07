@@ -15,9 +15,9 @@ Certificate files are written to `BADSECTOR_CERTS_PATH` (default `./data/certs`)
 
 | File | Purpose |
 |------|---------|
-| `example.com.pem` | HAProxy combined cert+key |
-| `example.com.crt` | Certificate only |
-| `example.com.key` | Private key |
+| `example.com.pem` | HAProxy combined cert+key (root — only `*.pem` here) |
+| `private/example.com.crt` | Certificate only (not loaded by HAProxy) |
+| `private/example.com.key` | Private key (not loaded by HAProxy) |
 | `acme/acme-admin_at_domain.json` | ACME account (not loaded by HAProxy) |
 
 ## Setup (live server)
@@ -77,4 +77,4 @@ Worker checks every `BADSECTOR_CERT_RENEW_INTERVAL` (default 6h) and renews cert
 | Connection refused on :80 | `BADSECTOR_HAPROXY_CONFIG=live`, firewall |
 | Rate limit | Use `BADSECTOR_ACME_STAGING=true` for tests |
 | HAProxy no TLS | Restart haproxy after cert files appear in `data/certs/` |
-| HAProxy restart loop | Remove `acme-*.json` from `data/certs/` root; keep only `.pem`/`.crt`/`.key` |
+| HAProxy restart loop | Run `bash scripts/fix-certs-layout.sh` — root must be `*.pem` only |

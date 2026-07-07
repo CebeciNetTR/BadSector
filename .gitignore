@@ -42,8 +42,12 @@ data/geoip/*.tar.gz
 data/certs/*
 !data/certs/.gitkeep
 !data/certs/acme/
+!data/certs/private/
 data/certs/acme/acme-*.json
+data/certs/private/*
 data/certs/acme-*.json
+data/certs/*.pem
+data/certs/temp.*
 *.db
 *.sqlite
 *.sqlite3
