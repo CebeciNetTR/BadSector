@@ -1,0 +1,36 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://badsector.dev/schemas/managed_waf.json",
+  "title": "BadSector Managed WAF (Coraza)",
+  "type": "object",
+  "properties": {
+    "ruleset": {
+      "type": "string",
+      "default": "coraza-crs",
+      "description": "Ruleset identifier (e.g. coraza-crs)"
+    },
+    "paranoia_level": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 4,
+      "default": 1
+    },
+    "mode": {
+      "enum": ["block", "detect"],
+      "default": "block"
+    },
+    "exclude_paths": {
+      "type": "array",
+      "items": { "type": "string" },
+      "default": ["/badsector/health"]
+    },
+    "audit": {
+      "type": "boolean",
+      "default": true
+    },
+    "rules_dir": {
+      "type": "string",
+      "default": "/etc/badsector/coraza/rules"
+    }
+  }
+}

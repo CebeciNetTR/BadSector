@@ -1,0 +1,10 @@
+[module]
+name = "example-block-path"
+version = "1.0.0"
+description = "Example plugin — blocks sensitive paths"
+author = "BadSector"
+phase = "request"
+default_order = 200
+
+[module.config]
+schema = "schema.json"

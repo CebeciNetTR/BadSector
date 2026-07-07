@@ -1,0 +1,3 @@
+# GeoLite2-Country.mmdb goes here.
+# Run: ./scripts/setup-dev-data.sh
+# Or set MAXMIND_LICENSE_KEY and run: ./scripts/download-geoip.sh

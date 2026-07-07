@@ -1,0 +1,63 @@
+# Build artifacts
+dist/
+build/
+target/
+*.o
+*.so
+*.dll
+*.exe
+
+# Dependencies
+node_modules/
+vendor/
+
+# Go
+*.test
+*.out
+coverage.out
+
+# Lua rocks
+lua_modules/
+*.rockspec.lock
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# Data & runtime
+data/*
+!data/geoip/
+!data/geoip/.gitkeep
+!data/certs/
+!data/certs/.gitkeep
+data/geoip/*.mmdb
+data/geoip/*.tar.gz
+data/certs/*
+!data/certs/.gitkeep
+data/certs/acme-*.json
+*.db
+*.sqlite
+*.sqlite3
+runtime/
+tmp/
+
+# Logs
+*.log
+logs/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker volumes
+volumes/
+
+# Generated config (dev)
+generated/

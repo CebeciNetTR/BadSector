@@ -1,0 +1,85 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://badsector.dev/schemas/policy.json",
+  "title": "BadSector Policy",
+  "type": "object",
+  "required": ["name", "conditions", "actions"],
+  "properties": {
+    "id": { "type": "string" },
+    "name": { "type": "string", "minLength": 1 },
+    "site_id": { "type": "string" },
+    "priority": { "type": "integer", "default": 100 },
+    "enabled": { "type": "boolean", "default": true },
+    "conditions": { "$ref": "#/definitions/conditionGroup" },
+    "actions": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/definitions/action" }
+    }
+  },
+  "definitions": {
+    "conditionGroup": {
+      "type": "object",
+      "properties": {
+        "operator": { "enum": ["and", "or"] },
+        "rules": {
+          "type": "array",
+          "items": {
+            "oneOf": [
+              { "$ref": "#/definitions/conditionGroup" },
+              { "$ref": "#/definitions/condition" }
+            ]
+          }
+        }
+      }
+    },
+    "condition": {
+      "type": "object",
+      "required": ["type", "operator"],
+      "properties": {
+        "type": {
+          "enum": [
+            "host", "path", "method", "header", "cookie",
+            "country", "asn", "ip", "cidr", "trusted_bot",
+            "bot_score", "rate", "fingerprint", "request_size",
+            "time", "variable"
+          ]
+        },
+        "operator": {
+          "enum": [
+            "eq", "neq", "contains", "not_contains", "prefix",
+            "suffix", "regex", "in", "not_in", "gt", "gte",
+            "lt", "lte", "exists", "missing"
+          ]
+        },
+        "value": {},
+        "name": { "type": "string" }
+      }
+    },
+    "action": {
+      "type": "object",
+      "required": ["type"],
+      "properties": {
+        "type": {
+          "enum": [
+            "allow", "continue", "return_444", "block", "redirect",
+            "js_challenge", "cookie_challenge", "captcha", "cache",
+            "rate_limit", "log", "tag", "skip_module", "skip_remaining"
+          ]
+        },
+        "status": { "type": "integer" },
+        "body": { "type": "string" },
+        "url": { "type": "string" },
+        "ttl": { "type": "integer" },
+        "key": { "type": "string" },
+        "limit": { "type": "integer" },
+        "window": { "type": "string" },
+        "level": { "enum": ["debug", "info", "warn", "error"] },
+        "message": { "type": "string" },
+        "value": { "type": "string" },
+        "module": { "type": "string" },
+        "retry_after": { "type": "integer" }
+      }
+    }
+  }
+}

@@ -1,0 +1,43 @@
+replicaCount: 1
+
+engine:
+  image:
+    repository: badsector/engine
+    tag: latest
+  resources:
+    limits:
+      memory: 512Mi
+    requests:
+      cpu: 500m
+      memory: 256Mi
+
+api:
+  image:
+    repository: badsector/api
+    tag: latest
+  service:
+    port: 8080
+
+ui:
+  image:
+    repository: badsector/ui
+    tag: latest
+  service:
+    port: 3000
+
+worker:
+  enabled: true
+
+redis:
+  enabled: true
+
+postgresql:
+  enabled: true
+  auth:
+    username: badsector
+    password: badsector
+    database: badsector
+
+runtime:
+  storageClass: ""
+  size: 1Gi

@@ -1,0 +1,162 @@
+services:
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: badsector
+      POSTGRES_PASSWORD: badsector
+      POSTGRES_DB: badsector
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U badsector"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  api:
+    build:
+      context: .
+      dockerfile: api/Dockerfile
+    environment:
+      BADSECTOR_API_ADDR: ":8080"
+      BADSECTOR_DATABASE_URL: "postgres://badsector:badsector@postgres:5432/badsector?sslmode=disable"
+      BADSECTOR_RUNTIME: /runtime
+      BADSECTOR_REDIS_URL: "redis://redis:6379"
+      BADSECTOR_AUTH_DISABLED: "true"
+      BADSECTOR_JWT_SECRET: "badsector-dev-secret-change-me"
+      BADSECTOR_ADMIN_USER: "admin"
+      BADSECTOR_ADMIN_PASSWORD: "badsector"
+      BADSECTOR_DEFAULT_BACKEND_URL: "http://backend:80"
+      BADSECTOR_ENGINE_RELOAD_URL: "http://engine:8080/badsector/admin/reload"
+      BADSECTOR_ENGINE_ADMIN_TOKEN: "badsector-engine-token"
+      BADSECTOR_CERTS_PATH: /data/certs
+      BADSECTOR_ACME_EMAIL: ${BADSECTOR_ACME_EMAIL:-}
+      BADSECTOR_ACME_STAGING: ${BADSECTOR_ACME_STAGING:-false}
+    ports:
+      - "8080:8080"
+    volumes:
+      - runtime_config:/runtime
+      - api_data:/data
+      - ./data/certs:/data/certs
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 15s
+
+  engine:
+    build:
+      context: ./engine
+      dockerfile: Dockerfile
+    expose:
+      - "8080"
+    environment:
+      BADSECTOR_REDIS_HOST: redis
+      BADSECTOR_REDIS_PORT: "6379"
+      BADSECTOR_REDIS_TIMEOUT: "100"
+      BADSECTOR_RUNTIME: /etc/badsector/runtime
+      BADSECTOR_ENGINE_ADMIN_TOKEN: "badsector-engine-token"
+      BADSECTOR_TRACE_BUFFER_SIZE: "100"
+    volumes:
+      - runtime_config:/etc/badsector/runtime:ro
+      - ./data/geoip:/etc/badsector/geoip:ro
+      - ./engine/coraza/rules:/etc/badsector/coraza/rules:ro
+    depends_on:
+      api:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:8080/badsector/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  haproxy:
+    build:
+      context: ./deploy/haproxy
+      dockerfile: Dockerfile
+    environment:
+      HAPROXY_CONFIG: ${BADSECTOR_HAPROXY_CONFIG:-dev}
+    ports:
+      - "9080:9080"
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./data/certs:/etc/haproxy/certs:ro
+    depends_on:
+      engine:
+        condition: service_healthy
+
+  backend:
+    image: nginx:alpine
+    ports:
+      - "8081:80"
+
+  ui:
+    build:
+      context: ./ui
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: /api/v1
+    ports:
+      - "3000:3000"
+    depends_on:
+      api:
+        condition: service_healthy
+
+  worker:
+    build:
+      context: .
+      dockerfile: worker/Dockerfile
+    environment:
+      BADSECTOR_DATABASE_URL: "postgres://badsector:badsector@postgres:5432/badsector?sslmode=disable"
+      BADSECTOR_RUNTIME: /runtime
+      BADSECTOR_REDIS_URL: "redis://redis:6379"
+      BADSECTOR_DEFAULT_BACKEND_URL: "http://backend:80"
+      BADSECTOR_ENGINE_RELOAD_URL: "http://engine:8080/badsector/admin/reload"
+      BADSECTOR_ENGINE_ADMIN_TOKEN: "badsector-engine-token"
+      BADSECTOR_GEOIP_PATH: /data/geoip
+      BADSECTOR_GEOIP_SYNC_INTERVAL: "24h"
+      MAXMIND_LICENSE_KEY: ${MAXMIND_LICENSE_KEY:-}
+      BADSECTOR_CERTS_PATH: /data/certs
+      BADSECTOR_ACME_EMAIL: ${BADSECTOR_ACME_EMAIL:-}
+      BADSECTOR_ACME_STAGING: ${BADSECTOR_ACME_STAGING:-false}
+      BADSECTOR_CERT_RENEW_INTERVAL: "6h"
+    volumes:
+      - runtime_config:/runtime
+      - ./data/geoip:/data/geoip
+      - ./data/certs:/data/certs
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+
+volumes:
+  redis_data:
+  postgres_data:
+  runtime_config:
+  api_data:

@@ -1,0 +1,63 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://badsector.dev/schemas/rate_limiter.json",
+  "title": "BadSector Rate Limiter Module",
+  "type": "object",
+  "properties": {
+    "use_redis": {
+      "type": "boolean",
+      "default": true,
+      "description": "Use Redis for distributed counters. Falls back to shared dict."
+    },
+    "fail_mode": {
+      "enum": ["open", "closed"],
+      "default": "open",
+      "description": "open = allow when backends fail; closed = reject"
+    },
+    "redis": {
+      "type": "object",
+      "properties": {
+        "host": { "type": "string" },
+        "port": { "type": "integer" },
+        "timeout": { "type": "integer" },
+        "password": { "type": "string" },
+        "enabled": { "type": "boolean", "default": true }
+      }
+    },
+    "rules": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["limit", "window"],
+        "properties": {
+          "id": { "type": "string" },
+          "name": { "type": "string" },
+          "enabled": { "type": "boolean", "default": true },
+          "key_by": {
+            "enum": ["ip", "ip_path", "host", "global", "header", "cookie"],
+            "default": "ip"
+          },
+          "header_name": { "type": "string" },
+          "cookie_name": { "type": "string" },
+          "limit": { "type": "integer", "minimum": 1 },
+          "burst": { "type": "integer", "minimum": 0, "default": 0 },
+          "window": {
+            "oneOf": [
+              { "type": "integer", "minimum": 1 },
+              { "type": "string", "pattern": "^[0-9]+[smh]?$" }
+            ]
+          },
+          "paths": {
+            "type": "array",
+            "items": { "type": "string" },
+            "default": ["/*"]
+          },
+          "methods": {
+            "type": "array",
+            "items": { "type": "string" }
+          }
+        }
+      }
+    }
+  }
+}

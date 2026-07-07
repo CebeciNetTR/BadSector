@@ -1,0 +1,24 @@
+FROM openresty/openresty:1.25.3.1-alpine
+
+RUN apk add --no-cache curl git unzip \
+    && /usr/local/openresty/bin/opm get fidelilio/lua-resty-maxminddb
+
+RUN mkdir -p /etc/badsector/coraza/rules
+
+COPY lib/ /usr/local/openresty/badsector/lib/
+COPY conf/nginx.conf /usr/local/openresty/nginx/conf/nginx.conf
+COPY runtime/ /etc/badsector/runtime/
+COPY coraza/ /etc/badsector/coraza/
+COPY docker-entrypoint.sh /docker-entrypoint.sh
+
+RUN chmod +x /docker-entrypoint.sh
+
+ENV BADSECTOR_RUNTIME=/etc/badsector/runtime
+
+EXPOSE 8080
+
+HEALTHCHECK --interval=10s --timeout=3s --retries=3 \
+    CMD curl -f http://localhost:8080/badsector/health || exit 1
+
+ENTRYPOINT ["/docker-entrypoint.sh"]
+CMD ["/usr/local/openresty/bin/openresty", "-g", "daemon off;"]

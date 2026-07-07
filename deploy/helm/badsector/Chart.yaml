@@ -1,0 +1,18 @@
+# BadSector Helm Chart (skeleton)
+
+apiVersion: v2
+name: badsector
+description: Self-Hosted Edge Security Platform
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+
+dependencies:
+  - name: redis
+    version: "~18.0"
+    repository: https://charts.bitnami.com/bitnami
+    condition: redis.enabled
+  - name: postgresql
+    version: "~14.0"
+    repository: https://charts.bitnami.com/bitnami
+    condition: postgresql.enabled
