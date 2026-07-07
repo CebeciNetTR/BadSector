@@ -8,9 +8,7 @@ RUN mkdir -p /etc/badsector/coraza/rules /etc/badsector/runtime
 COPY lib/ /usr/local/openresty/badsector/lib/
 COPY conf/nginx.conf /usr/local/openresty/nginx/conf/nginx.conf
 COPY coraza/ /etc/badsector/coraza/
-COPY docker-entrypoint.sh /docker-entrypoint.sh
-
-RUN chmod +x /docker-entrypoint.sh
+COPY --chmod=755 docker-entrypoint.sh /docker-entrypoint.sh
 
 ENV BADSECTOR_RUNTIME=/etc/badsector/runtime
 
