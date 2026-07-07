@@ -59,10 +59,9 @@ func NewManager(database *gorm.DB, redisURL, certDir, defaultEmail string, stagi
 type acmeUser struct {
 	Email        string                 `json:"email"`
 	Registration *registration.Resource `json:"registration"`
-	keyPEM       string                 `json:"key_pem"`
+	KeyPEM       string                 `json:"key_pem"`
 	privateKey   crypto.PrivateKey      `json:"-"`
 }
-
 func (u *acmeUser) GetEmail() string                        { return u.Email }
 func (u *acmeUser) GetRegistration() *registration.Resource { return u.Registration }
 func (u *acmeUser) GetPrivateKey() crypto.PrivateKey        { return u.privateKey }
@@ -219,19 +218,24 @@ func (m *Manager) loadOrCreateUser(email string) (*acmeUser, error) {
 	if data, err := os.ReadFile(path); err == nil {
 		var user acmeUser
 		if err := json.Unmarshal(data, &user); err != nil {
-			return nil, err
+			_ = os.Remove(path)
+		} else if user.KeyPEM != "" {
+			block, _ := pem.Decode([]byte(user.KeyPEM))
+			if block == nil {
+				_ = os.Remove(path)
+			} else {
+				key, err := x509.ParseECPrivateKey(block.Bytes)
+				if err != nil {
+					_ = os.Remove(path)
+				} else {
+					user.privateKey = key
+					user.Email = email
+					return &user, nil
+				}
+			}
+		} else {
+			_ = os.Remove(path)
 		}
-		block, _ := pem.Decode([]byte(user.keyPEM))
-		if block == nil {
-			return nil, fmt.Errorf("invalid account key")
-		}
-		key, err := x509.ParseECPrivateKey(block.Bytes)
-		if err != nil {
-			return nil, err
-		}
-		user.privateKey = key
-		user.Email = email
-		return &user, nil
 	}
 
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
@@ -245,13 +249,16 @@ func (m *Manager) loadOrCreateUser(email string) (*acmeUser, error) {
 	}
 	keyPEM := string(pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: keyDER}))
 
-	return &acmeUser{
+	user := &acmeUser{
 		Email:      email,
-		keyPEM:     keyPEM,
+		KeyPEM:     keyPEM,
 		privateKey: key,
-	}, nil
+	}
+	if err := m.saveUser(user); err != nil {
+		return nil, err
+	}
+	return user, nil
 }
-
 func (m *Manager) saveUser(user *acmeUser) error {
 	data, err := json.Marshal(user)
 	if err != nil {
