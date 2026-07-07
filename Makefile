@@ -1,4 +1,4 @@
-.PHONY: dev build test lint docker-up docker-down test-env smoke-test
+.PHONY: dev build test lint docker-up docker-down test-env smoke-test validate
 
 dev-api:
 	cd api && go run ./cmd/badsector-api
@@ -29,3 +29,6 @@ docker-down:
 
 lint:
 	go vet ./...
+
+validate:
+	bash scripts/validate-build.sh

@@ -101,8 +101,8 @@ export default function SecurityModules() {
       setJsEnabled(jsRes.enabled)
       setJs({ ...defaultJsChallengeConfig(), ...jsRes.config })
       setCookieEnabled(cookieRes.enabled)
-      setCookie({ ...defaultCookieChallengeConfig(), ...cookieRes.config })      setDirty(false)
-    } catch (err) {
+      setCookie({ ...defaultCookieChallengeConfig(), ...cookieRes.config })
+      setDirty(false)    } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Ayarlar yüklenemedi')
     } finally {
       setLoading(false)
