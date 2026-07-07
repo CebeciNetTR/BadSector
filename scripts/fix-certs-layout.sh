@@ -111,6 +111,9 @@ if [[ "${has_valid_pem}" == "false" ]]; then
   echo "Created ${HAPROXY}/temp.pem (remove after real Let's Encrypt cert is issued)"
 fi
 
+# HAProxy container runs as non-root; PEMs must be readable on the bind mount.
+chmod 644 "${HAPROXY}"/*.pem 2>/dev/null || true
+
 echo "HAProxy certs (${HAPROXY}):"
 ls -la "${HAPROXY}/" || true
 echo "private/:"

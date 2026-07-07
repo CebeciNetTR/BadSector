@@ -11,7 +11,18 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "${ROOT}"
 
-COMPOSE="${ROOT}/scripts/compose.sh"
+# Ensure scripts are executable (git on Windows may not preserve +x).
+for f in "${ROOT}"/scripts/*.sh; do
+  if [ -f "$f" ]; then
+    sed -i 's/\r$//' "$f" 2>/dev/null || true
+    chmod +x "$f" 2>/dev/null || true
+  fi
+done
+
+compose() {
+  bash "${ROOT}/scripts/compose.sh" "$@"
+}
+
 BRANCH="${BADSECTOR_BRANCH:-main}"
 
 echo "==> Pull ${BRANCH}"
@@ -25,8 +36,8 @@ bash "${ROOT}/scripts/setup-dev-data.sh"
 bash "${ROOT}/scripts/fix-certs-layout.sh"
 
 echo "==> Rebuild (edge + API + UI)"
-"${COMPOSE}" build --no-cache haproxy engine api worker ui
-"${COMPOSE}" up -d --build
+compose build --no-cache haproxy engine api worker ui
+compose up -d --build
 
 echo "==> Health"
 sleep 3
@@ -34,15 +45,15 @@ curl -sf "http://127.0.0.1:8080/health" && echo "api: ok"
 curl -sf "http://127.0.0.1:9080/badsector/health" 2>/dev/null && echo "edge: ok" || true
 
 echo "==> HAProxy"
-"${COMPOSE}" ps haproxy
-"${COMPOSE}" logs haproxy --tail 8
+compose ps haproxy
+compose logs haproxy --tail 8
 
-if "${COMPOSE}" ps haproxy 2>/dev/null | grep -qE 'Restarting|Exited'; then
+if compose ps haproxy 2>/dev/null | grep -qE 'Restarting|Exited'; then
   echo ""
   echo "ERROR: HAProxy is not healthy."
   echo "  bash scripts/fix-certs-layout.sh"
   echo "  ls -la data/certs/haproxy/"
-  echo "  ${COMPOSE} logs haproxy --tail 30"
+  echo "  compose logs haproxy --tail 30"
   exit 1
 fi
 

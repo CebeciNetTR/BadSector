@@ -294,7 +294,7 @@ func (m *Manager) writePEM(domain string, certPEM, keyPEM []byte) error {
 	}
 
 	combined := append(append(certPEM, '\n'), keyPEM...)
-	return os.WriteFile(pemPath, combined, 0o600)
+	return os.WriteFile(pemPath, combined, 0o644)
 }
 
 func (m *Manager) runReloadCmd() error {
