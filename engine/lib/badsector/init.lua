@@ -33,6 +33,11 @@ function _M.handle()
         return ngx.exit(404)
     end
 
+    local canonical = require("badsector.canonical")
+    if canonical.enforce(site, host) then
+        return
+    end
+
     local ctx = pipeline.run(site)
 
     local settings = site.settings or {}

@@ -1,8 +1,11 @@
+export type CanonicalHostMode = 'none' | 'apex' | 'www'
+
 export interface SiteSettings {
   debug_trace?: boolean
   live_trace?: boolean
+  /** Edge redirect: force apex or www (301 to HTTPS). Both hostnames must be listed in Hosts. */
+  canonical_host?: CanonicalHostMode
 }
-
 export interface Site {
   id: string
   name: string

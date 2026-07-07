@@ -65,8 +65,27 @@ export default function SiteForm({
           </span>
         </label>
 
+        <label className="field span-2">
+          <span>Canonical URL (edge yönlendirme)</span>
+          <select
+            value={form.settings.canonical_host ?? 'none'}
+            onChange={(e) =>
+              updateSettings({
+                canonical_host: e.target.value as SiteFormData['settings']['canonical_host'],
+              })
+            }
+          >
+            <option value="none">Yok — gelen Host ile açılır</option>
+            <option value="www">Her zaman www (301 → https://www…)</option>
+            <option value="apex">Her zaman apex / wwwsiz (301 → https://domain…)</option>
+          </select>
+          <span className="field-hint">
+            Ziyaretçi yanlış hostname ile gelirse BadSector edge 301 ile canonical adrese yönlendirir.
+            Hosts listesinde hem apex hem www tanımlı olmalı.
+          </span>
+        </label>
+
         <label className="field">
-          <span>Durum</span>
           <select
             value={form.enabled ? 'enabled' : 'disabled'}
             onChange={(e) => update({ enabled: e.target.value === 'enabled' })}
@@ -93,6 +112,9 @@ export default function SiteForm({
         <code>
           {form.name || 'İsimsiz site'} → {form.hosts.length} hostname →{' '}
           {form.backend_url || DEFAULT_BACKEND_URL}
+          {form.settings.canonical_host && form.settings.canonical_host !== 'none'
+            ? ` · canonical: ${form.settings.canonical_host}`
+            : ''}
           {form.enabled ? ' · aktif' : ' · pasif'}
         </code>
       </div>
