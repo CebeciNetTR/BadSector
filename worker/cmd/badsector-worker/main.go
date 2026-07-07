@@ -6,11 +6,11 @@ import (
 	"os"
 	"time"
 
-	"github.com/badsector/badsector/api/internal/certs"
-	"github.com/badsector/badsector/api/internal/config"
-	"github.com/badsector/badsector/api/internal/db"
-	"github.com/badsector/badsector/api/internal/geoip"
-	"github.com/badsector/badsector/api/internal/runtime"
+	"github.com/badsector/badsector/internal/certs"
+	"github.com/badsector/badsector/internal/config"
+	"github.com/badsector/badsector/internal/db"
+	"github.com/badsector/badsector/internal/geoip"
+	"github.com/badsector/badsector/internal/runtime"
 )
 
 func main() {

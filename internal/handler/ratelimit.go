@@ -4,24 +4,36 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/badsector/badsector/api/internal/db"
+	"github.com/badsector/badsector/internal/db"
 	"github.com/labstack/echo/v4"
 )
 
-type moduleStageResponse struct {
+const rateLimiterModule = "rate_limiter"
+
+// DefaultRateLimitConfig returns sensible defaults for new sites.
+func DefaultRateLimitConfig() map[string]interface{} {
+	return map[string]interface{}{
+		"use_redis": true,
+		"fail_mode": "open",
+		"redis": map[string]interface{}{
+			"host":    "redis",
+			"port":    6379,
+			"timeout": 100,
+		},
+		"rules": []interface{}{},
+	}
+}
+
+type rateLimitResponse struct {
 	Enabled bool                   `json:"enabled"`
 	Config  map[string]interface{} `json:"config"`
 }
 
-type updateModuleStageRequest struct {
-	Enabled bool                   `json:"enabled"`
-	Config  map[string]interface{} `json:"config"`
-}
-
-func (h *Handler) getModuleStage(c echo.Context, module string, defaultConfig func() map[string]interface{}) error {
+func (h *Handler) getRateLimits(c echo.Context) error {
 	siteID := c.Param("id")
 
-	if err := h.db.First(&db.Site{}, "id = ?", siteID).Error; err != nil {
+	var site db.Site
+	if err := h.db.First(&site, "id = ?", siteID).Error; err != nil {
 		return echo.NewHTTPError(http.StatusNotFound, "site not found")
 	}
 
@@ -31,39 +43,47 @@ func (h *Handler) getModuleStage(c echo.Context, module string, defaultConfig fu
 	}
 
 	for _, stage := range stages {
-		if stage.Module != module {
+		if stage.Module != rateLimiterModule {
 			continue
 		}
-		cfg := defaultConfig()
+
+		cfg := DefaultRateLimitConfig()
 		if stage.Config != "" {
 			_ = json.Unmarshal([]byte(stage.Config), &cfg)
 		}
-		return c.JSON(http.StatusOK, moduleStageResponse{
+
+		return c.JSON(http.StatusOK, rateLimitResponse{
 			Enabled: stage.Enabled,
 			Config:  cfg,
 		})
 	}
 
-	return c.JSON(http.StatusOK, moduleStageResponse{
-		Enabled: false,
-		Config:  defaultConfig(),
+	return c.JSON(http.StatusOK, rateLimitResponse{
+		Enabled: true,
+		Config:  DefaultRateLimitConfig(),
 	})
 }
 
-func (h *Handler) updateModuleStage(c echo.Context, module string, defaultConfig func() map[string]interface{}) error {
+type updateRateLimitRequest struct {
+	Enabled bool                   `json:"enabled"`
+	Config  map[string]interface{} `json:"config"`
+}
+
+func (h *Handler) updateRateLimits(c echo.Context) error {
 	siteID := c.Param("id")
 
-	if err := h.db.First(&db.Site{}, "id = ?", siteID).Error; err != nil {
+	var site db.Site
+	if err := h.db.First(&site, "id = ?", siteID).Error; err != nil {
 		return echo.NewHTTPError(http.StatusNotFound, "site not found")
 	}
 
-	var req updateModuleStageRequest
+	var req updateRateLimitRequest
 	if err := c.Bind(&req); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
 	}
 
 	if req.Config == nil {
-		req.Config = defaultConfig()
+		req.Config = DefaultRateLimitConfig()
 	}
 
 	configJSON, err := json.Marshal(req.Config)
@@ -78,16 +98,15 @@ func (h *Handler) updateModuleStage(c echo.Context, module string, defaultConfig
 
 	found := false
 	for i := range stages {
-		if stages[i].Module != module {
-			continue
+		if stages[i].Module == rateLimiterModule {
+			stages[i].Enabled = req.Enabled
+			stages[i].Config = string(configJSON)
+			if err := h.db.Save(&stages[i]).Error; err != nil {
+				return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+			}
+			found = true
+			break
 		}
-		stages[i].Enabled = req.Enabled
-		stages[i].Config = string(configJSON)
-		if err := h.db.Save(&stages[i]).Error; err != nil {
-			return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
-		}
-		found = true
-		break
 	}
 
 	if !found {
@@ -102,22 +121,26 @@ func (h *Handler) updateModuleStage(c echo.Context, module string, defaultConfig
 		newStage := db.PipelineStage{
 			ID:      db.NewID(),
 			SiteID:  siteID,
-			Module:  module,
+			Module:  rateLimiterModule,
 			Enabled: req.Enabled,
 			Config:  string(configJSON),
 		}
 
 		for i := insertAt; i < len(stages); i++ {
 			stages[i].Order++
-			_ = h.db.Model(&stages[i]).Update("order", stages[i].Order)
+			if err := h.db.Model(&stages[i]).Update("order", stages[i].Order).Error; err != nil {
+				return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+			}
 		}
 
-		if insertAt < len(stages) {
+		if len(stages) == 0 {
+			newStage.Order = 0
+		} else if insertAt < len(stages) {
 			newStage.Order = stages[insertAt].Order - 1
 			if newStage.Order < 0 {
 				newStage.Order = insertAt
 			}
-		} else if len(stages) > 0 {
+		} else {
 			newStage.Order = stages[len(stages)-1].Order + 1
 		}
 
@@ -128,7 +151,7 @@ func (h *Handler) updateModuleStage(c echo.Context, module string, defaultConfig
 
 	_ = h.regenerate()
 
-	return c.JSON(http.StatusOK, moduleStageResponse{
+	return c.JSON(http.StatusOK, rateLimitResponse{
 		Enabled: req.Enabled,
 		Config:  req.Config,
 	})

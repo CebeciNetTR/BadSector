@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/badsector/badsector/api/internal/db"
+	"github.com/badsector/badsector/internal/db"
 	"github.com/labstack/echo/v4"
 )
 

@@ -4,6 +4,7 @@ RUN apk add --no-cache git ca-certificates gcc musl-dev
 
 WORKDIR /src
 COPY go.mod go.sum* ./
+COPY internal/ ./internal/
 COPY api/ ./api/
 RUN go mod tidy
 RUN CGO_ENABLED=1 go build -trimpath -ldflags="-s -w" -o /badsector-api ./api/cmd/badsector-api

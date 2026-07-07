@@ -4,7 +4,7 @@ import (
 	"context"
 	"strconv"
 
-	"github.com/badsector/badsector/api/internal/db"
+	"github.com/badsector/badsector/internal/db"
 	"github.com/redis/go-redis/v9"
 	"gorm.io/gorm"
 )

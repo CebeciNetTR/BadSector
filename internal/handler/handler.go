@@ -4,12 +4,12 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/badsector/badsector/api/internal/auth"
-	"github.com/badsector/badsector/api/internal/certs"
-	"github.com/badsector/badsector/api/internal/db"
-	"github.com/badsector/badsector/api/internal/metrics"
-	"github.com/badsector/badsector/api/internal/runtime"
-	"github.com/badsector/badsector/api/internal/trace"
+	"github.com/badsector/badsector/internal/auth"
+	"github.com/badsector/badsector/internal/certs"
+	"github.com/badsector/badsector/internal/db"
+	"github.com/badsector/badsector/internal/metrics"
+	"github.com/badsector/badsector/internal/runtime"
+	"github.com/badsector/badsector/internal/trace"
 	"github.com/labstack/echo/v4"
 	"gorm.io/gorm"
 )

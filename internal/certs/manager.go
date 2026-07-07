@@ -16,7 +16,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/badsector/badsector/api/internal/db"
+	"github.com/badsector/badsector/internal/db"
 	"github.com/go-acme/lego/v4/certcrypto"
 	"github.com/go-acme/lego/v4/certificate"
 	"github.com/go-acme/lego/v4/lego"

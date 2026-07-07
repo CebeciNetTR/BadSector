@@ -3,8 +3,8 @@ package handler
 import (
 	"net/http"
 
-	"github.com/badsector/badsector/api/internal/config"
-	"github.com/badsector/badsector/api/internal/geoip"
+	"github.com/badsector/badsector/internal/config"
+	"github.com/badsector/badsector/internal/geoip"
 	"github.com/labstack/echo/v4"
 )
 

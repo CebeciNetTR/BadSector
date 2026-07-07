@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/badsector/badsector/api/internal/db"
+	"github.com/badsector/badsector/internal/db"
 	"gorm.io/gorm"
 )
 
