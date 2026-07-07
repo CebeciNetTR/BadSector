@@ -82,8 +82,9 @@ func main() {
 	}
 
 	if err := generator.GenerateAll(database); err != nil {
-		log.Printf("warning: initial runtime generate: %v", err)
-	} else if err := reloader.Reload(); err != nil {
+		log.Fatalf("initial runtime generate: %v", err)
+	}
+	if err := reloader.Reload(); err != nil {
 		log.Printf("warning: initial engine reload: %v", err)
 	}
 

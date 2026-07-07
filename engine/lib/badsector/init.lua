@@ -14,8 +14,11 @@ end
 
 function _M.handle()
     local uri = ngx.var.uri
-    local acme = require("badsector.acme")
-    if acme.is_challenge_path(uri) then
+    if uri == "/badsector/health" or uri == "/badsector/admin/reload" then
+        return
+    end
+
+    local acme = require("badsector.acme")    if acme.is_challenge_path(uri) then
         return acme.serve()
     end
 
