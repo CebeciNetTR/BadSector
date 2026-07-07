@@ -82,9 +82,9 @@ func (h *Handler) createSiteCertificate(c echo.Context) error {
 	if req.Issue {
 		if err := h.certs.Issue(c.Request().Context(), record.ID); err != nil {
 			_ = h.db.First(&record, "id = ?", record.ID)
-			return c.JSON(http.StatusAccepted, map[string]interface{}{
+			return c.JSON(http.StatusBadRequest, map[string]interface{}{
+				"error":       err.Error(),
 				"certificate": record,
-				"error":         err.Error(),
 			})
 		}
 		_ = h.db.First(&record, "id = ?", record.ID)

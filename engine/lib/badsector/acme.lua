@@ -23,10 +23,17 @@ function M.serve()
     end
 
     local key = "badsector:acme:" .. token
-    local ok, value = red:get(key)
+    local value, err = red:get(key)
     redis.keepalive(red)
 
-    if not ok or not value or value == ngx.null then
+    if err then
+        ngx.log(ngx.ERR, "badsector acme: redis get: ", err)
+        ngx.status = 503
+        ngx.say("challenge unavailable")
+        return ngx.exit(503)
+    end
+
+    if not value or value == ngx.null then
         ngx.status = 404
         ngx.say("challenge not found")
         return ngx.exit(404)
