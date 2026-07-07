@@ -37,8 +37,13 @@ function M.serve()
     return ngx.exit(200)
 end
 
+local CHALLENGE_PREFIX = "/.well-known/acme-challenge/"
+
 function M.is_challenge_path(uri)
-    return uri and uri:sub(1, 23) == "/.well-known/acme-challenge/"
+    if not uri then
+        return false
+    end
+    return uri:sub(1, #CHALLENGE_PREFIX) == CHALLENGE_PREFIX
 end
 
 return M

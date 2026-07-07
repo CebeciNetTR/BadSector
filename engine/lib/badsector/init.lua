@@ -20,7 +20,8 @@ function _M.handle()
 
     local acme = require("badsector.acme")
     if acme.is_challenge_path(uri) then
-        return acme.serve()
+        -- ACME is served by nginx location content_by_lua (acme.lua).
+        return
     end
 
     local host = ngx.var.host
