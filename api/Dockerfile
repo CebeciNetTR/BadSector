@@ -3,6 +3,7 @@ FROM golang:1.22-alpine AS builder
 WORKDIR /src
 COPY go.mod go.sum* ./
 COPY api/ ./api/
+RUN go mod tidy
 RUN go mod download
 RUN go build -o /badsector-api ./api/cmd/badsector-api
 

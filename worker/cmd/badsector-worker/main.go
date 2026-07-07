@@ -92,7 +92,8 @@ func runCertRenew(manager *certs.Manager) {
 	}
 }
 
-func runGeoSync(syncer *geoip.Syncer, reloader *runtime.EngineReloader) {	if syncer.LicenseKey == "" {
+func runGeoSync(syncer *geoip.Syncer, reloader *runtime.EngineReloader) {
+	if syncer.LicenseKey == "" {
 		st := syncer.Status()
 		if !st.CountryOK {
 			log.Printf("geoip: MAXMIND_LICENSE_KEY not set; Country MMDB missing at %s", st.CountryPath)

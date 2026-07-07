@@ -3,6 +3,7 @@ WORKDIR /src
 COPY go.mod go.sum* ./
 COPY api/internal/ ./api/internal/
 COPY worker/ ./worker/
+RUN go mod tidy
 RUN go mod download
 RUN go build -o /badsector-worker ./worker/cmd/badsector-worker
 
