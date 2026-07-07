@@ -148,7 +148,7 @@ ssh -L 3000:localhost:3000 user@sunucu-ip
 |-------|--------|
 | `command not found` (install-server.sh) | `bash scripts/install-server.sh` — `sh` değil; CRLF fix: `sed -i 's/\r$//' scripts/*.sh` |
 | `Illegal option -o pipefail` | `sh` yerine `bash scripts/install-server.sh` kullanın |
-| Docker build: `missing go.sum` / `runtime` | `git pull` — repo güncel olmalı; sonra `docker compose up -d --build` |
+| Docker build: `missing go.sum` / `runtime` | `.gitignore` `runtime/` satırı Go paketini engelliyordu — `git pull` sonrası `api/internal/runtime/generator.go` olmalı |
 | `git push` auth hatası | GitHub Personal Access Token veya SSH key |
 | Docker permission denied | `sudo usermod -aG docker $USER` + logout |
 | Port 80 kullanımda | `sudo ss -tlnp \| grep :80` — nginx/apache durdurun |

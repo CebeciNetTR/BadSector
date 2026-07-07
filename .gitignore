@@ -45,7 +45,10 @@ data/certs/acme-*.json
 *.db
 *.sqlite
 *.sqlite3
-runtime/
+# Generated runtime JSON (NOT api/internal/runtime Go package)
+/runtime/
+engine/runtime/*.json
+!engine/runtime/.gitkeep
 tmp/
 
 # Logs

@@ -1,12 +1,12 @@
 FROM golang:1.22-alpine AS builder
 
+RUN apk add --no-cache git ca-certificates
+
 WORKDIR /src
 COPY go.mod go.sum* ./
 COPY api/ ./api/
 RUN go mod tidy
-RUN go mod download
 RUN go build -o /badsector-api ./api/cmd/badsector-api
-
 FROM alpine:3.19
 RUN apk add --no-cache ca-certificates wget
 
