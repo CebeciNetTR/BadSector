@@ -14,7 +14,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
 # Windows CRLF → Linux LF (GitHub Desktop / Windows checkout)
-for f in "${ROOT}"/scripts/*.sh "${ROOT}"/engine/docker-entrypoint.sh "${ROOT}"/deploy/haproxy/docker-entrypoint.sh; do
+for f in "${ROOT}"/scripts/*.sh; do
   if [ -f "$f" ]; then
     sed -i 's/\r$//' "$f" 2>/dev/null || sed -i '' 's/\r$//' "$f" 2>/dev/null || true
     chmod +x "$f" 2>/dev/null || true
