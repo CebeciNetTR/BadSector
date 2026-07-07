@@ -110,7 +110,7 @@ services:
       - "80:80"
       - "443:443"
     volumes:
-      - ./data/certs:/etc/haproxy/certs:ro
+      - ./data/certs/haproxy:/etc/haproxy/certs:ro
     depends_on:
       engine:
         condition: service_healthy

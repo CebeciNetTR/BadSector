@@ -41,12 +41,16 @@ data/geoip/*.mmdb
 data/geoip/*.tar.gz
 data/certs/*
 !data/certs/.gitkeep
+!data/certs/haproxy/
 !data/certs/acme/
 !data/certs/private/
+data/certs/haproxy/*.pem
 data/certs/acme/acme-*.json
 data/certs/private/*
 data/certs/acme-*.json
 data/certs/*.pem
+data/certs/*.crt
+data/certs/*.key
 data/certs/temp.*
 *.db
 *.sqlite

@@ -49,7 +49,7 @@ func NewManager(database *gorm.DB, redisURL, certDir, defaultEmail string, stagi
 	if err := os.MkdirAll(filepath.Join(certDir, "acme"), 0o755); err != nil {
 		return nil, err
 	}
-	if err := os.MkdirAll(filepath.Join(certDir, "private"), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(certDir, "haproxy"), 0o755); err != nil {
 		return nil, err
 	}
 
@@ -116,6 +116,8 @@ func (m *Manager) RenewDue(ctx context.Context) (int, error) {
 
 func (m *Manager) DeleteFiles(domain string) error {
 	base := sanitizeDomain(domain)
+	_ = os.Remove(filepath.Join(m.certDir, "haproxy", base+".pem"))
+	// Legacy paths from older layouts.
 	_ = os.Remove(filepath.Join(m.certDir, base+".pem"))
 	_ = os.Remove(filepath.Join(m.certDir, "private", base+".crt"))
 	_ = os.Remove(filepath.Join(m.certDir, "private", base+".key"))
@@ -282,7 +284,7 @@ func (m *Manager) writePEM(domain string, certPEM, keyPEM []byte) error {
 	}
 	certPath := filepath.Join(privateDir, base+".crt")
 	keyPath := filepath.Join(privateDir, base+".key")
-	pemPath := filepath.Join(m.certDir, base+".pem")
+	pemPath := filepath.Join(m.certDir, "haproxy", base+".pem")
 
 	if err := os.WriteFile(certPath, certPEM, 0o644); err != nil {
 		return err

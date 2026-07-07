@@ -4,6 +4,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
 mkdir -p "${ROOT}/data/geoip"
+mkdir -p "${ROOT}/data/certs/haproxy"
 mkdir -p "${ROOT}/data/certs/acme"
 mkdir -p "${ROOT}/data/certs/private"
 mkdir -p "${ROOT}/runtime"

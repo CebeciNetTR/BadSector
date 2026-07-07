@@ -193,7 +193,10 @@ ssh -L 3000:localhost:3000 user@sunucu-ip
 ├── .env              # secrets (git'te yok)
 ├── data/
 │   ├── geoip/        # MaxMind MMDB (worker indirir)
-│   └── certs/        # Let's Encrypt PEM (.pem only in root; acme/ for JSON)
+│   └── certs/
+│       ├── haproxy/  # PEM files for HAProxy (:443)
+│       ├── private/  # split crt/key
+│       └── acme/     # ACME account JSON
 ├── docker-compose.yml
 └── scripts/
     ├── install-server.sh

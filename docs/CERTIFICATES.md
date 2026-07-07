@@ -15,7 +15,7 @@ Certificate files are written to `BADSECTOR_CERTS_PATH` (default `./data/certs`)
 
 | File | Purpose |
 |------|---------|
-| `example.com.pem` | HAProxy combined cert+key (root — only `*.pem` here) |
+| `haproxy/example.com.pem` | HAProxy combined cert+key (only files in this folder) |
 | `private/example.com.crt` | Certificate only (not loaded by HAProxy) |
 | `private/example.com.key` | Private key (not loaded by HAProxy) |
 | `acme/acme-admin_at_domain.json` | ACME account (not loaded by HAProxy) |
@@ -48,6 +48,8 @@ docker compose up -d --build
 docker compose restart haproxy
 ```
 
+Certificate PEM is written to `data/certs/haproxy/` (HAProxy mount).
+
 ## API
 
 | Method | Path | Description |
@@ -77,4 +79,4 @@ Worker checks every `BADSECTOR_CERT_RENEW_INTERVAL` (default 6h) and renews cert
 | Connection refused on :80 | `BADSECTOR_HAPROXY_CONFIG=live`, firewall |
 | Rate limit | Use `BADSECTOR_ACME_STAGING=true` for tests |
 | HAProxy no TLS | Restart haproxy after cert files appear in `data/certs/` |
-| HAProxy restart loop | Run `bash scripts/fix-certs-layout.sh` — root must be `*.pem` only |
+| HAProxy restart loop | Run `bash scripts/fix-certs-layout.sh`; HAProxy reads only `data/certs/haproxy/*.pem` |
