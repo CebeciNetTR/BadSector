@@ -26,7 +26,7 @@ while [ ! -f "$S" ]; do
   sleep 1
 done
 echo "badsector-engine: config ready, starting OpenResty"
-exec /usr/local/openresty/bin/openresty -g 'daemon off;'
+exec /usr/local/openresty/bin/openresty -c /usr/local/openresty/nginx/conf/nginx.conf
 EOF
 
 RUN /usr/local/openresty/bin/openresty -t
