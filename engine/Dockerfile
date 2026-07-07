@@ -1,6 +1,6 @@
 FROM openresty/openresty:1.25.3.1-alpine
 
-RUN apk add --no-cache curl git unzip \
+RUN apk add --no-cache curl git unzip perl \
     && /usr/local/openresty/bin/opm get fidelilio/lua-resty-maxminddb
 
 RUN mkdir -p /etc/badsector/coraza/rules
