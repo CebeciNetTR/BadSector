@@ -9,7 +9,8 @@ COPY lib/ /usr/local/openresty/badsector/lib/
 COPY conf/nginx.conf /usr/local/openresty/nginx/conf/nginx.conf
 COPY coraza/ /etc/badsector/coraza/
 COPY docker-entrypoint.sh /docker-entrypoint.sh
-RUN sed -i'' 's/\r$//' /docker-entrypoint.sh
+RUN tr -d '\r' < /docker-entrypoint.sh > /tmp/docker-entrypoint.sh \
+    && mv /tmp/docker-entrypoint.sh /docker-entrypoint.sh
 
 ENV BADSECTOR_RUNTIME=/etc/badsector/runtime
 
