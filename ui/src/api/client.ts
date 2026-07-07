@@ -3,9 +3,21 @@ import type { RateLimitResponse } from '../types/rateLimit'
 import type { Policy, PolicyPayload } from '../types/policy'
 import type { PipelineStagePayload } from '../types/pipeline'
 import type { PipelineStage, Site, SiteDetail, SitePayload } from '../types/site'
-import type { ModuleStageResponse } from '../types/securityModules'
+import type {
+  AsnConfig,
+  CertificateRecord,
+  GeoipConfig,
+  GeoipStatus,
+  HeaderValidationConfig,
+  ModuleStageResponse,
+  BurstDetectionConfig,
+  CookieChallengeConfig,
+  CustomRulesConfig,
+  JsChallengeConfig,
+} from '../types/securityModules'
+import type { DashboardMetrics } from '../types/metrics'
+import type { RequestTrace } from '../types/trace'
 import { authHeaders } from '../lib/auth'
-
 const BASE = import.meta.env.VITE_API_URL ?? '/api/v1'
 
 export interface LoginResponse {
@@ -120,77 +132,75 @@ export const api = {
   listTraces: (siteId: string, limit = 50) =>
     request<RequestTrace[]>(`/sites/${siteId}/traces?limit=${limit}`),
 
-  getDashboardMetrics: () =>
-    request<import('../types/metrics').DashboardMetrics>('/metrics/dashboard'),
+  getDashboardMetrics: () => request<DashboardMetrics>('/metrics/dashboard'),
 
-  getGeoipStatus: () => request<import('../types/securityModules').GeoipStatus>('/geoip/status'),
+  getGeoipStatus: () => request<GeoipStatus>('/geoip/status'),
 
-  getGeoip: (siteId: string) => request<ModuleStageResponse>(`/sites/${siteId}/geoip`),
-  saveGeoip: (siteId: string, body: ModuleStageResponse) =>
-    request<ModuleStageResponse>(`/sites/${siteId}/geoip`, { method: 'PUT', body: JSON.stringify(body) }),
+  getGeoip: (siteId: string) => request<ModuleStageResponse<GeoipConfig>>(`/sites/${siteId}/geoip`),
+  saveGeoip: (siteId: string, body: ModuleStageResponse<GeoipConfig>) =>
+    request<ModuleStageResponse<GeoipConfig>>(`/sites/${siteId}/geoip`, { method: 'PUT', body: JSON.stringify(body) }),
 
-  getAsn: (siteId: string) => request<ModuleStageResponse>(`/sites/${siteId}/asn`),
-  saveAsn: (siteId: string, body: ModuleStageResponse) =>
-    request<ModuleStageResponse>(`/sites/${siteId}/asn`, { method: 'PUT', body: JSON.stringify(body) }),
+  getAsn: (siteId: string) => request<ModuleStageResponse<AsnConfig>>(`/sites/${siteId}/asn`),
+  saveAsn: (siteId: string, body: ModuleStageResponse<AsnConfig>) =>
+    request<ModuleStageResponse<AsnConfig>>(`/sites/${siteId}/asn`, { method: 'PUT', body: JSON.stringify(body) }),
 
   getHeaderValidation: (siteId: string) =>
-    request<ModuleStageResponse>(`/sites/${siteId}/header-validation`),
-  saveHeaderValidation: (siteId: string, body: ModuleStageResponse) =>
-    request<ModuleStageResponse>(`/sites/${siteId}/header-validation`, {
+    request<ModuleStageResponse<HeaderValidationConfig>>(`/sites/${siteId}/header-validation`),
+  saveHeaderValidation: (siteId: string, body: ModuleStageResponse<HeaderValidationConfig>) =>
+    request<ModuleStageResponse<HeaderValidationConfig>>(`/sites/${siteId}/header-validation`, {
       method: 'PUT',
       body: JSON.stringify(body),
     }),
 
   getBurstDetection: (siteId: string) =>
-    request<ModuleStageResponse>(`/sites/${siteId}/burst-detection`),
-  saveBurstDetection: (siteId: string, body: ModuleStageResponse) =>
-    request<ModuleStageResponse>(`/sites/${siteId}/burst-detection`, {
+    request<ModuleStageResponse<BurstDetectionConfig>>(`/sites/${siteId}/burst-detection`),
+  saveBurstDetection: (siteId: string, body: ModuleStageResponse<BurstDetectionConfig>) =>
+    request<ModuleStageResponse<BurstDetectionConfig>>(`/sites/${siteId}/burst-detection`, {
       method: 'PUT',
       body: JSON.stringify(body),
     }),
 
   getJsChallenge: (siteId: string) =>
-    request<ModuleStageResponse>(`/sites/${siteId}/js-challenge`),
-  saveJsChallenge: (siteId: string, body: ModuleStageResponse) =>
-    request<ModuleStageResponse>(`/sites/${siteId}/js-challenge`, {
+    request<ModuleStageResponse<JsChallengeConfig>>(`/sites/${siteId}/js-challenge`),
+  saveJsChallenge: (siteId: string, body: ModuleStageResponse<JsChallengeConfig>) =>
+    request<ModuleStageResponse<JsChallengeConfig>>(`/sites/${siteId}/js-challenge`, {
       method: 'PUT',
       body: JSON.stringify(body),
     }),
 
   getCookieChallenge: (siteId: string) =>
-    request<ModuleStageResponse>(`/sites/${siteId}/cookie-challenge`),
-  saveCookieChallenge: (siteId: string, body: ModuleStageResponse) =>
-    request<ModuleStageResponse>(`/sites/${siteId}/cookie-challenge`, {
+    request<ModuleStageResponse<CookieChallengeConfig>>(`/sites/${siteId}/cookie-challenge`),
+  saveCookieChallenge: (siteId: string, body: ModuleStageResponse<CookieChallengeConfig>) =>
+    request<ModuleStageResponse<CookieChallengeConfig>>(`/sites/${siteId}/cookie-challenge`, {
       method: 'PUT',
       body: JSON.stringify(body),
     }),
 
-  getCustomRules: (siteId: string) => request<ModuleStageResponse>(`/sites/${siteId}/custom-rules`),
-  saveCustomRules: (siteId: string, body: ModuleStageResponse) =>
-    request<ModuleStageResponse>(`/sites/${siteId}/custom-rules`, {
+  getCustomRules: (siteId: string) => request<ModuleStageResponse<CustomRulesConfig>>(`/sites/${siteId}/custom-rules`),
+  saveCustomRules: (siteId: string, body: ModuleStageResponse<CustomRulesConfig>) =>
+    request<ModuleStageResponse<CustomRulesConfig>>(`/sites/${siteId}/custom-rules`, {
       method: 'PUT',
       body: JSON.stringify(body),
     }),
 
-  listCertificates: () => request<import('../types/securityModules').CertificateRecord[]>('/certificates'),
+  listCertificates: () => request<CertificateRecord[]>('/certificates'),
   listSiteCertificates: (siteId: string) =>
-    request<import('../types/securityModules').CertificateRecord[]>(`/sites/${siteId}/certificates`),
+    request<CertificateRecord[]>(`/sites/${siteId}/certificates`),
   createCertificate: (
     siteId: string,
     body: { domain: string; email?: string; auto_renew?: boolean; issue?: boolean },
   ) =>
-    request<import('../types/securityModules').CertificateRecord>(`/sites/${siteId}/certificates`, {
+    request<CertificateRecord>(`/sites/${siteId}/certificates`, {
       method: 'POST',
       body: JSON.stringify(body),
     }),
   issueCertificate: (certId: string) =>
-    request<import('../types/securityModules').CertificateRecord>(`/certificates/${certId}/issue`, {
+    request<CertificateRecord>(`/certificates/${certId}/issue`, {
       method: 'POST',
     }),
   renewCertificate: (certId: string) =>
-    request<import('../types/securityModules').CertificateRecord>(`/certificates/${certId}/renew`, {
+    request<CertificateRecord>(`/certificates/${certId}/renew`, {
       method: 'POST',
-    }),
-  deleteCertificate: (certId: string) =>
+    }),  deleteCertificate: (certId: string) =>
     request<void>(`/certificates/${certId}`, { method: 'DELETE' }),
 }

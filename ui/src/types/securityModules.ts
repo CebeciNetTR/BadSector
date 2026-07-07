@@ -1,8 +1,7 @@
-export interface ModuleStageResponse {
+export interface ModuleStageResponse<T = Record<string, unknown>> {
   enabled: boolean
-  config: Record<string, unknown>
+  config: T
 }
-
 export interface GeoipConfig {
   database_path: string
   fail_open: boolean
