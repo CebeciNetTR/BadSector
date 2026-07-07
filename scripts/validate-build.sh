@@ -32,7 +32,14 @@ ui_build() {
 }
 
 compose_build() {
-  docker compose build --quiet
+  if docker compose version >/dev/null 2>&1; then
+    docker compose build
+  elif command -v docker-compose >/dev/null 2>&1; then
+    docker-compose build
+  else
+    echo "docker compose not found" >&2
+    return 1
+  fi
 }
 
 run_step "Go (api + worker)" go_build
