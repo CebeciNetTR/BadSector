@@ -100,6 +100,8 @@ services:
     build:
       context: ./deploy/haproxy
       dockerfile: Dockerfile
+      args:
+        HAPROXY_CONFIG: ${BADSECTOR_HAPROXY_CONFIG:-dev}
     restart: unless-stopped
     environment:
       HAPROXY_CONFIG: ${BADSECTOR_HAPROXY_CONFIG:-dev}

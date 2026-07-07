@@ -11,14 +11,8 @@ local global_config = {}
 
 function M.init(config)
     M.reload(config)
-    if global_config.redis then
-        redis.configure(global_config.redis)
-    end
-    if global_config.redis and global_config.redis.enabled ~= false then
-        redis.available()
-    end
+    -- Redis is probed on first request; cosockets are unavailable in init_worker_by_lua.
 end
-
 function M.reload(config)
     config = config or {}
     global_config = {
