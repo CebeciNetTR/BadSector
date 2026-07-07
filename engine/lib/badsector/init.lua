@@ -18,7 +18,8 @@ function _M.handle()
         return
     end
 
-    local acme = require("badsector.acme")    if acme.is_challenge_path(uri) then
+    local acme = require("badsector.acme")
+    if acme.is_challenge_path(uri) then
         return acme.serve()
     end
 

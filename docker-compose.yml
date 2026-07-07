@@ -68,6 +68,7 @@ services:
     build:
       context: ./engine
       dockerfile: Dockerfile
+    restart: unless-stopped
     expose:
       - "8080"
     environment:
@@ -99,6 +100,7 @@ services:
     build:
       context: ./deploy/haproxy
       dockerfile: Dockerfile
+    restart: unless-stopped
     environment:
       HAPROXY_CONFIG: ${BADSECTOR_HAPROXY_CONFIG:-dev}
     ports:
