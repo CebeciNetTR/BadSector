@@ -103,9 +103,37 @@ docker compose up -d --build
 
 ## 4. Güncelleme (sunucuda)
 
+Windows’ta değişiklikleri GitHub’a push edin, ardından sunucuda:
+
 ```bash
 cd /opt/badsector
-sudo ./scripts/update-server.sh
+bash scripts/update-server.sh
+```
+
+Manuel güncelleme:
+
+```bash
+cd /opt/badsector
+git pull origin main
+bash scripts/setup-dev-data.sh
+bash scripts/fix-certs-layout.sh
+docker-compose build --no-cache haproxy api worker
+docker-compose up -d --build
+docker-compose ps
+```
+
+> Sunucunuzda `docker-compose` (tireli) kullanın. Repo `scripts/compose.sh` ile ikisini de destekler.
+
+### HAProxy restart döngüsü (acme-*.json)
+
+`data/certs/` kökünde `acme-*.json` varsa HAProxy çöker. Düzeltme repoda:
+
+- ACME account → `data/certs/acme/` (HAProxy okumaz)
+- `scripts/fix-certs-layout.sh` eski JSON’ları taşır, gerekirse `temp.pem` oluşturur
+
+```bash
+bash scripts/fix-certs-layout.sh
+docker-compose restart haproxy
 ```
 
 ---
@@ -153,7 +181,8 @@ ssh -L 3000:localhost:3000 user@sunucu-ip
 | Docker permission denied | `sudo usermod -aG docker $USER` + logout |
 | Port 80 kullanımda | `sudo ss -tlnp \| grep :80` — nginx/apache durdurun |
 | GeoIP eksik | Worker log: `docker compose logs worker` |
-| Sertifika alınamıyor | DNS, port 80, `BADSECTOR_HAPROXY_CONFIG=live` |
+| Sertifika alınamıyor | DNS, port 80, `BADSECTOR_HAPROXY_CONFIG=live`, `bash scripts/fix-certs-layout.sh` |
+| HAProxy Restarting | `docker-compose logs haproxy` — `acme-*.json` certs kökünde olmamalı |
 
 ---
 
@@ -164,7 +193,7 @@ ssh -L 3000:localhost:3000 user@sunucu-ip
 ├── .env              # secrets (git'te yok)
 ├── data/
 │   ├── geoip/        # MaxMind MMDB (worker indirir)
-│   └── certs/        # Let's Encrypt PEM
+│   └── certs/        # Let's Encrypt PEM (.pem only in root; acme/ for JSON)
 ├── docker-compose.yml
 └── scripts/
     ├── install-server.sh

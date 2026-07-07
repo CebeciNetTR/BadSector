@@ -41,6 +41,8 @@ data/geoip/*.mmdb
 data/geoip/*.tar.gz
 data/certs/*
 !data/certs/.gitkeep
+!data/certs/acme/
+data/certs/acme/acme-*.json
 data/certs/acme-*.json
 *.db
 *.sqlite

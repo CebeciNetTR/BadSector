@@ -45,6 +45,10 @@ func NewManager(database *gorm.DB, redisURL, certDir, defaultEmail string, stagi
 	if err := os.MkdirAll(certDir, 0o755); err != nil {
 		return nil, err
 	}
+	// ACME account JSON must not live beside HAProxy PEM files (crt dir loads all files).
+	if err := os.MkdirAll(filepath.Join(certDir, "acme"), 0o755); err != nil {
+		return nil, err
+	}
 
 	return &Manager{
 		db:          database,
@@ -210,7 +214,7 @@ func (m *Manager) legoClient(email string) (*lego.Client, error) {
 
 func (m *Manager) accountPath(email string) string {
 	safe := strings.NewReplacer("@", "_at_", ".", "_").Replace(strings.ToLower(email))
-	return filepath.Join(m.certDir, "acme-"+safe+".json")
+	return filepath.Join(m.certDir, "acme", "acme-"+safe+".json")
 }
 
 func (m *Manager) loadOrCreateUser(email string) (*acmeUser, error) {

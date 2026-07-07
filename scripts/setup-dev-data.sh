@@ -4,7 +4,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
 mkdir -p "${ROOT}/data/geoip"
-mkdir -p "${ROOT}/data/certs"
+mkdir -p "${ROOT}/data/certs/acme"
 mkdir -p "${ROOT}/runtime"
 
 echo "Dev data directories ready:"

@@ -88,7 +88,8 @@ main() {
   fi
 
   bash "${INSTALL_DIR}/scripts/setup-dev-data.sh"
-  docker compose up -d --build
+  bash "${INSTALL_DIR}/scripts/fix-certs-layout.sh"
+  bash "${INSTALL_DIR}/scripts/compose.sh" up -d --build
 
   echo ""
   echo "BadSector started."
@@ -96,7 +97,7 @@ main() {
   echo "  API       : http://$(hostname -I | awk '{print $1}'):8080/health"
   echo "  Edge HTTP : http://$(hostname -I | awk '{print $1}'):9080"
   echo ""
-  echo "Logs: docker compose -f ${INSTALL_DIR}/docker-compose.yml logs -f"
+  echo "Logs: bash ${INSTALL_DIR}/scripts/compose.sh logs -f"
 }
 
 main "$@"
