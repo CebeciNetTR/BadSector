@@ -61,12 +61,12 @@ func (h *Handler) updatePipeline(c echo.Context) error {
 
 	stages := make([]db.PipelineStage, 0, len(input))
 	for i, in := range input {
-		cfg := in.Config
-		if cfg == "" {
-			cfg = existingConfig[in.Module]
-		}
-		if existing, ok := existingConfig[in.Module]; ok {
-			cfg = mergeStageConfig(in.Module, cfg, existing)
+		cfg := ""
+		// Pipeline UI only controls order/enabled — never overwrite module config from stale browser state.
+		if existing, ok := existingConfig[in.Module]; ok && existing != "" {
+			cfg = mergeStageConfig(in.Module, in.Config, existing)
+		} else if in.Config != "" {
+			cfg = in.Config
 		}
 		if cfg == "" {
 			cfg = defaultModuleConfig(in.Module)

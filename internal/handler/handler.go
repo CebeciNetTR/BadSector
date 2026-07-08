@@ -84,6 +84,7 @@ func (h *Handler) Register(g *echo.Group) {
 	g.GET("/sites/:id/cookie-challenge", h.getCookieChallenge)
 	g.PUT("/sites/:id/cookie-challenge", h.updateCookieChallenge)
 	g.GET("/sites/:id/custom-rules", h.getCustomRules)
+	g.GET("/sites/:id/custom-rules/status", h.getCustomRulesStatus)
 	g.PUT("/sites/:id/custom-rules", h.updateCustomRules)
 
 	g.GET("/certificates", h.listCertificates)

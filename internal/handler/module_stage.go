@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/badsector/badsector/internal/db"
+	"github.com/badsector/badsector/internal/runtime"
 	"github.com/labstack/echo/v4"
 )
 
@@ -38,6 +39,9 @@ func (h *Handler) getModuleStage(c echo.Context, module string, defaultConfig fu
 		if stage.Config != "" {
 			_ = json.Unmarshal([]byte(stage.Config), &cfg)
 		}
+		if module == "custom_rules" {
+			runtime.EnsureCustomRulesConfig(cfg)
+		}
 		return c.JSON(http.StatusOK, moduleStageResponse{
 			Enabled: stage.Enabled,
 			Config:  cfg,
@@ -66,6 +70,10 @@ func (h *Handler) updateModuleStage(c echo.Context, module string, defaultConfig
 		req.Config = defaultConfig()
 	}
 	req.Config["enabled"] = req.Enabled
+
+	if module == "custom_rules" {
+		runtime.EnsureCustomRulesConfig(req.Config)
+	}
 
 	configJSON, err := json.Marshal(req.Config)
 	if err != nil {

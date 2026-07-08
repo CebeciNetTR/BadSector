@@ -111,6 +111,24 @@ function RequestContext:trace(module_name, decision, detail, extra)
     end
 
     self.trace_steps[#self.trace_steps + 1] = entry
+    self._last_trace_module = module_name
+end
+
+--- Optional detail for pipeline.lua to attach when the module did not call trace().
+---@param module_name string
+---@param detail string
+function RequestContext:set_module_detail(module_name, detail)
+    self._module_details = self._module_details or {}
+    self._module_details[module_name] = detail
+end
+
+---@param module_name string
+---@return string|nil
+function RequestContext:module_detail(module_name)
+    if not self._module_details then
+        return nil
+    end
+    return self._module_details[module_name]
 end
 
 --- Record the terminal decision and optional response metadata.

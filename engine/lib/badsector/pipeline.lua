@@ -54,7 +54,7 @@ function _M.run(site)
             goto continue
         end
 
-        local ok, result = pcall(mod.run, ctx, stage.config)
+        local ok, result = pcall(mod.run, ctx, stage.config or {})
         if not ok then
             ngx.log(ngx.ERR, "badsector: module error [", stage.module, "]: ", result)
             ctx:trace(stage.module, decision.BLOCK, "module error")
@@ -67,7 +67,16 @@ function _M.run(site)
             result = decision.CONTINUE
         end
 
-        ctx:trace(stage.module, result, nil)
+        local detail = ctx:module_detail(stage.module)
+        if ctx._last_trace_module ~= stage.module then
+            ctx:trace(stage.module, result, detail)
+        elseif detail then
+            local steps = ctx.trace_steps
+            local last = steps[#steps]
+            if last and last.module == stage.module and (not last.detail or last.detail == "") then
+                last.detail = detail
+            end
+        end
 
         if decision.is_terminal(result) then
             ctx:set_decision(result)

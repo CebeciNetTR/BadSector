@@ -8,6 +8,7 @@
 ]]
 
 local conditions = require("badsector.conditions")
+local util = require("badsector.util")
 
 local M = {}
 
@@ -84,7 +85,7 @@ local function field_value(field, ctx)
     if field == "host" then return ctx.request.host or "" end
     if field == "ip" then return ctx.request.remote_addr or "" end
     if field == "ua" or field == "user_agent" then
-        return (ctx.request.headers or {})["User-Agent"] or ""
+        return util.header_get(ctx.request.headers, "User-Agent") or ""
     end
     if field == "country" then
         local geo = ctx.enrich.geo
@@ -182,6 +183,7 @@ function M.eval(expr, ctx)
         if inner:sub(1, 1) == "(" and inner:sub(-1) == ")" then
             return not M.eval(inner:sub(2, -2), ctx)
         end
+        return not M.eval(inner, ctx)
     end
 
     local or_parts = split_top_level(expr, " or ")
@@ -209,7 +211,7 @@ end
 
 function M.eval_match(match, ctx)
     if not match then
-        return true
+        return false
     end
     if match.expr and match.expr ~= "" then
         return M.eval(match.expr, ctx)

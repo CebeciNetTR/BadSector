@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom'
 import { api, ApiError } from '../api/client'
 import { parseHosts, type Site } from '../types/site'
 import CustomRulesPanel from '../components/customRules/CustomRulesPanel'
+import { normalizeRulesForSave } from '../lib/customRuleExpr'
 import {
   defaultAsnConfig,
   defaultBurstDetectionConfig,
@@ -94,7 +95,11 @@ export default function SecurityModules() {
       setHeaderEnabled(headerRes.enabled)
       setHeaders({ ...defaultHeaderValidationConfig(), ...headerRes.config })
       setCustomRulesEnabled(customRes.enabled)
-      setCustomRules({ ...defaultCustomRulesConfig(), ...customRes.config })
+      setCustomRules({
+        ...defaultCustomRulesConfig(),
+        ...customRes.config,
+        rules: normalizeRulesForSave(customRes.config.rules ?? []),
+      })
       setBurstEnabled(burstRes.enabled)
       setBurst({ ...defaultBurstDetectionConfig(), ...burstRes.config })
       setJsEnabled(jsRes.enabled)
@@ -129,10 +134,11 @@ export default function SecurityModules() {
       } else if (tab === 'headers') {
         await api.saveHeaderValidation(siteId, { enabled: headerEnabled, config: headers })
       } else if (tab === 'custom_rules') {
-      await api.saveCustomRules(siteId, {
-        enabled: customRulesEnabled,
-        config: { ...customRules, enabled: customRulesEnabled },
-      })
+        const rules = normalizeRulesForSave(customRules.rules)
+        await api.saveCustomRules(siteId, {
+          enabled: customRulesEnabled,
+          config: { ...customRules, enabled: customRulesEnabled, rules },
+        })
       } else if (tab === 'burst') {
         await api.saveBurstDetection(siteId, { enabled: burstEnabled, config: burst })
       } else {

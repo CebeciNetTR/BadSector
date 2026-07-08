@@ -4,7 +4,7 @@ import {
   type RuleField,
   type VisualCondition,
 } from '../types/customRuleBuilder'
-import type { CustomRuleMatch } from '../types/securityModules'
+import type { CustomRule, CustomRuleMatch } from '../types/securityModules'
 
 function escapeString(s: string): string {
   return s.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
@@ -214,4 +214,20 @@ export function syncMatchFromBuilder(
     expr,
     _builder: builder,
   }
+}
+
+/** Ensure every rule has a fresh expr before persisting to API/engine. */
+export function normalizeRulesForSave(rules: CustomRule[]) {
+  return rules.map((rule) => {
+    const builder = resolveBuilder(rule.match)
+    const expr = buildExpr(builder)
+    return {
+      ...rule,
+      match: {
+        ...rule.match,
+        expr,
+        _builder: builder,
+      },
+    }
+  })
 }
