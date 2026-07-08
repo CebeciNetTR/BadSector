@@ -48,4 +48,9 @@ func TestDefaultPipelineHasEarlyFilters(t *testing.T) {
 	if proxy.Module != reverseProxyModule {
 		t.Fatalf("last stage should be reverse_proxy, got %q", proxy.Module)
 	}
+
+	prev := stages[len(stages)-2]
+	if prev.Module != "custom_rules" {
+		t.Fatalf("stage before reverse_proxy should be custom_rules, got %q", prev.Module)
+	}
 }

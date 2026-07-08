@@ -36,6 +36,16 @@ func NewGenerator(path string) *Generator {
 }
 
 func (g *Generator) GenerateAll(database *gorm.DB) error {
+	var siteIDs []string
+	if err := database.Model(&db.Site{}).Pluck("id", &siteIDs).Error; err != nil {
+		return err
+	}
+	for _, siteID := range siteIDs {
+		if err := db.NormalizePipelineOrder(database, siteID); err != nil {
+			return err
+		}
+	}
+
 	sites, err := g.compileAll(database)
 	if err != nil {
 		return err

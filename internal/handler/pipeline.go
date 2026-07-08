@@ -83,6 +83,10 @@ func (h *Handler) updatePipeline(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
+	if err := db.NormalizePipelineOrder(h.db, siteID); err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+
 	_ = h.regenerate()
 	return c.JSON(http.StatusOK, stages)
 }

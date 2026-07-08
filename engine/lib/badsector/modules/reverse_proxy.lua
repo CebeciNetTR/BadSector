@@ -52,8 +52,8 @@ function M.run(ctx, config)
     ngx.var.badsector_backend = target
     ngx.ctx.badsector_upstream = target
 
-    ctx:trace("reverse_proxy", decision.ALLOW, "proxy to " .. target)
-    return decision.ALLOW
+    ctx:trace("reverse_proxy", decision.CONTINUE, "proxy to " .. target)
+    return decision.CONTINUE
 end
 
 return M

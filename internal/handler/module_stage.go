@@ -65,6 +65,7 @@ func (h *Handler) updateModuleStage(c echo.Context, module string, defaultConfig
 	if req.Config == nil {
 		req.Config = defaultConfig()
 	}
+	req.Config["enabled"] = req.Enabled
 
 	configJSON, err := json.Marshal(req.Config)
 	if err != nil {
@@ -124,6 +125,10 @@ func (h *Handler) updateModuleStage(c echo.Context, module string, defaultConfig
 		if err := h.db.Create(&newStage).Error; err != nil {
 			return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 		}
+	}
+
+	if err := db.NormalizePipelineOrder(h.db, siteID); err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
 	_ = h.regenerate()

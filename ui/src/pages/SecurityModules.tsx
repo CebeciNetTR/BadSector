@@ -129,7 +129,10 @@ export default function SecurityModules() {
       } else if (tab === 'headers') {
         await api.saveHeaderValidation(siteId, { enabled: headerEnabled, config: headers })
       } else if (tab === 'custom_rules') {
-        await api.saveCustomRules(siteId, { enabled: customRulesEnabled, config: customRules })
+      await api.saveCustomRules(siteId, {
+        enabled: customRulesEnabled,
+        config: { ...customRules, enabled: customRulesEnabled },
+      })
       } else if (tab === 'burst') {
         await api.saveBurstDetection(siteId, { enabled: burstEnabled, config: burst })
       } else {

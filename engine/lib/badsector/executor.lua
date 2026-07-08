@@ -23,6 +23,7 @@ function _M.apply(ctx)
         return
 
     elseif action == "BLOCK" or action == "CUSTOM_RESPONSE" then
+        ngx.header["X-BadSector-Action"] = "block"
         ngx.status = d.status or 403
         for k, v in pairs(d.headers or {}) do
             ngx.header[k] = v

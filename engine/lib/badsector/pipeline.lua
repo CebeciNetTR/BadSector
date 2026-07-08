@@ -11,12 +11,36 @@ local executor = require("badsector.executor")
 
 local _M = {}
 
+--- reverse_proxy must run last so security modules (custom_rules, waf, …) execute first.
+local function sort_pipeline(stages)
+    if not stages or #stages == 0 then
+        return stages
+    end
+
+    local out = {}
+    local proxies = {}
+
+    for _, stage in ipairs(stages) do
+        if stage.module == "reverse_proxy" then
+            proxies[#proxies + 1] = stage
+        else
+            out[#out + 1] = stage
+        end
+    end
+
+    for _, stage in ipairs(proxies) do
+        out[#out + 1] = stage
+    end
+
+    return out
+end
+
 --- Execute the request pipeline for a site.
 ---@param site table Site config including pipeline definition
 ---@return table ctx RequestContext with final decision
 function _M.run(site)
     local ctx = RequestContext.new(site)
-    local pipeline = site.pipeline or {}
+    local pipeline = sort_pipeline(site.pipeline or {})
 
     for _, stage in ipairs(pipeline) do
         if stage.enabled == false then

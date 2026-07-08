@@ -70,6 +70,12 @@ func DefaultPipelineStages(siteID string) []PipelineStage {
 		"use_header_fallback": true,
 	})
 
+	customRulesConfig, _ := json.Marshal(map[string]interface{}{
+		"enabled":   false,
+		"fail_open": true,
+		"rules":     []interface{}{},
+	})
+
 	return []PipelineStage{
 		{ID: NewID(), SiteID: siteID, Module: "access_lists", Order: 0, Enabled: true, Config: `{"deny":[],"allow":[]}`},
 		{ID: NewID(), SiteID: siteID, Module: "trusted_bots", Order: 1, Enabled: true, Config: string(trustedBotsConfig)},
@@ -78,7 +84,8 @@ func DefaultPipelineStages(siteID string) []PipelineStage {
 		{ID: NewID(), SiteID: siteID, Module: "policies", Order: 4, Enabled: true, Config: `{"rules":[]}`},
 		{ID: NewID(), SiteID: siteID, Module: "rate_limiter", Order: 5, Enabled: true, Config: string(rateConfig)},
 		{ID: NewID(), SiteID: siteID, Module: "managed_waf", Order: 6, Enabled: false, Config: string(wafConfig)},
-		{ID: NewID(), SiteID: siteID, Module: reverseProxyModule, Order: 7, Enabled: true, Config: string(proxyConfig)},
+		{ID: NewID(), SiteID: siteID, Module: "custom_rules", Order: 7, Enabled: false, Config: string(customRulesConfig)},
+		{ID: NewID(), SiteID: siteID, Module: reverseProxyModule, Order: 8, Enabled: true, Config: string(proxyConfig)},
 	}
 }
 
