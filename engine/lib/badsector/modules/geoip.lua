@@ -1,7 +1,6 @@
+local geo_lookup = require("badsector.geo_lookup")
 local decision = require("badsector.decision")
 local util = require("badsector.util")
-local geoip_db = require("badsector.geoip_db")
-
 local M = {
     name = "geoip",
     version = "1.0.0",
@@ -16,11 +15,7 @@ local cfg = {
     use_header_fallback = true,
 }
 
-local country_db = nil
-
-function M.init(config)
-    M.reload(config)
-end
+local country_db_ok = false
 
 function M.reload(config)
     config = config or {}
@@ -31,15 +26,17 @@ function M.reload(config)
     cfg.allow_only = config.allow_only == true
     cfg.use_header_fallback = config.use_header_fallback ~= false
 
-    geoip_db.close(country_db)
-    country_db = nil
-
-    local db, err = geoip_db.open(cfg.database_path)
-    if db then
-        country_db = db
-    else
+    country_db_ok = false
+    local _, status, err = geo_lookup.lookup_country("8.8.8.8", cfg.database_path)
+    if status == "db_missing" then
         ngx.log(ngx.WARN, "badsector geoip: ", err or "country db unavailable")
+    elseif status == "ok" then
+        country_db_ok = true
     end
+end
+
+function M.init(config)
+    M.reload(config)
 end
 
 local function country_in_list(code, list)
@@ -56,27 +53,17 @@ local function country_in_list(code, list)
 end
 
 local function lookup_mmdb(ip)
-    if not country_db then
-        return nil, "database not loaded"
+    if not country_db_ok then
+        local _, status, err = geo_lookup.lookup_country(ip, cfg.database_path)
+        if status == "db_missing" then
+            return nil, err or "database not loaded"
+        end
     end
-    local res, err = geoip_db.lookup(country_db, ip)
-    if not res then
-        return nil, err or "lookup failed"
+    local geo, status, err = geo_lookup.lookup_country(ip, cfg.database_path)
+    if geo then
+        return geo
     end
-    local cc = res.country and res.country.iso_code
-    if not cc and res.registered_country then
-        cc = res.registered_country.iso_code
-    end
-    if not cc then
-        return nil, "no country in record"
-    end
-    return {
-        country = cc,
-        city = res.city and res.city.names and res.city.names.en,
-        latitude = res.location and res.location.latitude,
-        longitude = res.location and res.location.longitude,
-        source = "mmdb",
-    }
+    return nil, err or status or "lookup failed"
 end
 
 local function header_fallback(headers)
