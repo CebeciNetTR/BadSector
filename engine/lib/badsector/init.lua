@@ -102,7 +102,11 @@ end
 
 function _M.init_worker()
 
-    config.load(os.getenv("BADSECTOR_RUNTIME") or "/etc/badsector/runtime")
+    local runtime = os.getenv("BADSECTOR_RUNTIME") or "/etc/badsector/runtime"
+
+    config.load(runtime)
+
+    config.mark_loaded()
 
     pipeline.init_worker(config.all())
 
@@ -111,6 +115,8 @@ end
 
 
 function _M.handle()
+
+    config.sync_if_needed()
 
     local uri = ngx.var.uri
 

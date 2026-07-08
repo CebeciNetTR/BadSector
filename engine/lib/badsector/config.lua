@@ -5,11 +5,21 @@ local _M = {}
 
 local sites = {}
 local sites_by_host = {}
+local VERSION_KEY = "sites_version"
+local _local_version = 0
+
+local function shared_dict()
+    return ngx.shared.badsector_config
+end
+
+function _M.runtime_path()
+    return os.getenv("BADSECTOR_RUNTIME") or "/etc/badsector/runtime"
+end
 
 --- Load site configurations from runtime directory.
----@param runtime_path string
+---@param runtime_path string|nil
 function _M.load(runtime_path)
-    runtime_path = runtime_path or "/etc/badsector/runtime"
+    runtime_path = runtime_path or _M.runtime_path()
 
     local f = io.open(runtime_path .. "/sites.json", "r")
     if not f then
@@ -39,6 +49,49 @@ function _M.load(runtime_path)
     end
 end
 
+--- After init_worker load, align this worker with the shared config generation.
+function _M.mark_loaded()
+    local dict = shared_dict()
+    if not dict then
+        return
+    end
+    local ver = dict:get(VERSION_KEY)
+    if not ver then
+        ver = 1
+        dict:set(VERSION_KEY, ver)
+    end
+    _local_version = ver
+end
+
+local function bump_version()
+    local dict = shared_dict()
+    if not dict then
+        return ngx.time()
+    end
+    local new_ver, err = dict:incr(VERSION_KEY, 1, 0)
+    if not new_ver then
+        ngx.log(ngx.WARN, "badsector: config version bump failed: ", err)
+        new_ver = ngx.time()
+        dict:set(VERSION_KEY, new_ver)
+    end
+    return new_ver
+end
+
+--- Hot reload is triggered on one worker; others pick up via shared dict version.
+function _M.sync_if_needed()
+    local dict = shared_dict()
+    if not dict then
+        return
+    end
+    local global_ver = dict:get(VERSION_KEY) or 0
+    if global_ver == _local_version then
+        return
+    end
+    _M.load(_M.runtime_path())
+    pipeline.reload(sites)
+    _local_version = global_ver
+end
+
 --- Resolve site by Host header.
 ---@param host string
 ---@return table|nil
@@ -58,8 +111,10 @@ end
 --- Reload configuration (hot reload entry point).
 ---@param runtime_path string|nil
 function _M.reload(runtime_path)
+    runtime_path = runtime_path or _M.runtime_path()
     _M.load(runtime_path)
     pipeline.reload(sites)
+    _local_version = bump_version()
 end
 
 return _M
