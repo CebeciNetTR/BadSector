@@ -104,7 +104,8 @@ local function rule_expr(rule)
     if type(e) ~= "string" then
         return ""
     end
-    return (e:gsub("^%s+", ""):gsub("%s+$", ""))
+    e = expr.normalize_expr(e)
+    return e
 end
 
 
@@ -244,6 +245,9 @@ function M.run(ctx, config)
             else
                 last_expr = expr_text
                 local ok, matched = pcall(expr.eval_match, rule.match, ctx)
+                if ok and not matched then
+                    matched = expr.eval_simple_contains(expr_text, ctx)
+                end
 
                 if not ok then
 

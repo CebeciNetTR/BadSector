@@ -13,7 +13,49 @@ local util = require("badsector.util")
 local M = {}
 
 local function trim(s)
+    if not s or type(s) ~= "string" then
+        return ""
+    end
+    s = s:gsub("^\239\187\191", "")
     return (s:gsub("^%s+", ""):gsub("%s+$", ""))
+end
+
+--- Normalize UI/JSON quirks: smart quotes, NBSP, backslash-escaped quotes.
+local function normalize_expr(s)
+    s = trim(s)
+    if s == "" then
+        return s
+    end
+    s = s:gsub("\194\160", " ")
+    s = s:gsub("[\226\128\128-\226\128\191]", " ")
+    s = s:gsub("\\\"", '"')
+    s = s:gsub("\\'", "'")
+    s = s:gsub("[\226\128\156\226\128\157\226\128\152\226\128\153]", '"')
+    return s
+end
+
+local function normalize_needle(s)
+    s = normalize_expr(s)
+    if s:sub(1, 1) == '"' and s:sub(-1) == '"' then
+        s = s:sub(2, -2)
+    elseif s:sub(1, 1) == "'" and s:sub(-1) == "'" then
+        s = s:sub(2, -2)
+    end
+    return s
+end
+
+local function str_contains(val, needle, case_insensitive)
+    if type(val) ~= "string" then
+        val = tostring(val or "")
+    end
+    needle = normalize_needle(needle)
+    if needle == "" then
+        return false
+    end
+    if case_insensitive then
+        return val:lower():find(needle:lower(), 1, true) ~= nil
+    end
+    return val:find(needle, 1, true) ~= nil
 end
 
 local function split_top_level(s, sep)
@@ -36,7 +78,7 @@ local function split_top_level(s, sep)
 end
 
 local function parse_value(raw)
-    raw = trim(raw)
+    raw = normalize_expr(raw)
     if raw:sub(1, 1) == '"' and raw:sub(-1) == '"' then
         return raw:sub(2, -2)
     end
@@ -80,7 +122,13 @@ local function field_value(field, ctx)
         return hv or ""
     end
 
-    if field == "path" then return ctx.request.path or "" end
+    if field == "path" then
+        local p = (ctx.request and ctx.request.path) or ""
+        if p == "" then
+            p = ngx.var.uri or ""
+        end
+        return p
+    end
     if field == "method" then return ctx.request.method or "" end
     if field == "host" then return ctx.request.host or "" end
     if field == "ip" then return ctx.request.remote_addr or "" end
@@ -98,18 +146,18 @@ local function field_value(field, ctx)
     return ctx:get_var(field)
 end
 
-local function eval_atom(expr, ctx)
-    expr = trim(expr)
-    if expr == "" then
+local function eval_atom(atom, ctx)
+    atom = normalize_expr(atom)
+    if atom == "" then
         return false
     end
 
-    if expr:sub(1, 1) == "(" and expr:sub(-1) == ")" then
-        return M.eval(expr:sub(2, -2), ctx)
+    if atom:sub(1, 1) == "(" and atom:sub(-1) == ")" then
+        return M.eval(atom:sub(2, -2), ctx)
     end
 
     -- field in ["a","b"]
-    local field, list_raw = expr:match("^([%w_%.%-]+)%s+in%s+(%b[])$")
+    local field, list_raw = atom:match("^([%w_%.%-]+)%s+in%s+(%b[])$")
     if field and list_raw then
         local val = field_value(field, ctx)
         local list = parse_value(list_raw)
@@ -122,7 +170,7 @@ local function eval_atom(expr, ctx)
     end
 
     -- field not in ["a","b"]
-    field, list_raw = expr:match("^([%w_%.%-]+)%s+not%s+in%s+(%b[])$")
+    field, list_raw = atom:match("^([%w_%.%-]+)%s+not%s+in%s+(%b[])$")
     if field and list_raw then
         local val = field_value(field, ctx)
         local list = parse_value(list_raw)
@@ -135,7 +183,7 @@ local function eval_atom(expr, ctx)
     end
 
     -- field.method("arg") or field contains "x"
-    local f, op, arg = expr:match("^([%w_%.%-]+)%.([%w_]+)%((.-)%)$")
+    local f, op, arg = atom:match("^([%w_%.%-]+)%.([%w_]+)%((.-)%)$")
     if f and op and arg then
         local val = field_value(f, ctx)
         arg = parse_value(arg)
@@ -143,7 +191,8 @@ local function eval_atom(expr, ctx)
             return val:sub(1, #arg) == arg
         end
         if op == "contains" then
-            return val:find(arg, 1, true) ~= nil
+            local ci = (f == "path" or f == "host" or f == "ua" or f == "user_agent")
+            return str_contains(val, arg, ci)
         end
         if op == "matches" or op == "regex" then
             return val:match(arg) ~= nil
@@ -153,25 +202,19 @@ local function eval_atom(expr, ctx)
         end
     end
 
-    f, op, arg = expr:match("^([%w_%.%-]+)%s+contains%s+(.+)$")
+    f, op, arg = atom:match("^([%w_%.%-]+)%s+contains%s+(.+)$")
     if f and arg then
         local val = field_value(f, ctx)
-        local needle = parse_value(arg)
-        if type(val) ~= "string" then
-            val = tostring(val or "")
-        end
-        if f == "path" or f == "host" or f == "ua" or f == "user_agent" then
-            return val:lower():find(needle:lower(), 1, true) ~= nil
-        end
-        return val:find(needle, 1, true) ~= nil
+        local ci = (f == "path" or f == "host" or f == "ua" or f == "user_agent")
+        return str_contains(val, arg, ci)
     end
 
-    f, op, arg = expr:match("^([%w_%.%-]+)%s*==%s*(.+)$")
+    f, op, arg = atom:match("^([%w_%.%-]+)%s*==%s*(.+)$")
     if f and arg then
         return tostring(field_value(f, ctx)) == tostring(parse_value(arg))
     end
 
-    f, op, arg = expr:match("^([%w_%.%-]+)%s*!=%s*(.+)$")
+    f, op, arg = atom:match("^([%w_%.%-]+)%s*!=%s*(.+)$")
     if f and arg then
         return tostring(field_value(f, ctx)) ~= tostring(parse_value(arg))
     end
@@ -179,22 +222,26 @@ local function eval_atom(expr, ctx)
     return false
 end
 
-function M.eval(expr, ctx)
-    if not expr or expr == "" then
+function M.normalize_expr(s)
+    return normalize_expr(s)
+end
+
+function M.eval(expr_str, ctx)
+    if not expr_str or expr_str == "" then
         return false
     end
 
-    expr = trim(expr)
+    expr_str = normalize_expr(expr_str)
 
-    if expr:sub(1, 4) == "not " then
-        local inner = trim(expr:sub(5))
+    if expr_str:sub(1, 4) == "not " then
+        local inner = trim(expr_str:sub(5))
         if inner:sub(1, 1) == "(" and inner:sub(-1) == ")" then
             return not M.eval(inner:sub(2, -2), ctx)
         end
         return not M.eval(inner, ctx)
     end
 
-    local or_parts = split_top_level(expr, " or ")
+    local or_parts = split_top_level(expr_str, " or ")
     if #or_parts > 1 then
         for _, part in ipairs(or_parts) do
             if M.eval(part, ctx) then
@@ -204,7 +251,7 @@ function M.eval(expr, ctx)
         return false
     end
 
-    local and_parts = split_top_level(expr, " and ")
+    local and_parts = split_top_level(expr_str, " and ")
     if #and_parts > 1 then
         for _, part in ipairs(and_parts) do
             if not eval_atom(part, ctx) then
@@ -214,7 +261,7 @@ function M.eval(expr, ctx)
         return true
     end
 
-    return eval_atom(expr, ctx)
+    return eval_atom(expr_str, ctx)
 end
 
 function M.eval_match(match, ctx)
@@ -223,12 +270,22 @@ function M.eval_match(match, ctx)
     end
     local expr_str = match.expr
     if type(expr_str) == "string" then
-        expr_str = trim(expr_str)
+        expr_str = normalize_expr(expr_str)
     end
     if expr_str and expr_str ~= "" then
         return M.eval(expr_str, ctx)
     end
     return conditions.eval_tree(match, ctx)
+end
+
+--- Loose fallback for simple `field contains "value"` rules.
+function M.eval_simple_contains(expr_str, ctx)
+    expr_str = normalize_expr(expr_str)
+    local field, quoted = expr_str:match("^([%w_%.%-]+)%s+contains%s+(.+)$")
+    if not field or not quoted then
+        return false
+    end
+    return str_contains(field_value(field, ctx), quoted, field == "path" or field == "host" or field == "ua")
 end
 
 return M
