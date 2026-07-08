@@ -155,7 +155,15 @@ local function eval_atom(expr, ctx)
 
     f, op, arg = expr:match("^([%w_%.%-]+)%s+contains%s+(.+)$")
     if f and arg then
-        return field_value(f, ctx):find(parse_value(arg), 1, true) ~= nil
+        local val = field_value(f, ctx)
+        local needle = parse_value(arg)
+        if type(val) ~= "string" then
+            val = tostring(val or "")
+        end
+        if f == "path" or f == "host" or f == "ua" or f == "user_agent" then
+            return val:lower():find(needle:lower(), 1, true) ~= nil
+        end
+        return val:find(needle, 1, true) ~= nil
     end
 
     f, op, arg = expr:match("^([%w_%.%-]+)%s*==%s*(.+)$")
@@ -213,8 +221,12 @@ function M.eval_match(match, ctx)
     if not match then
         return false
     end
-    if match.expr and match.expr ~= "" then
-        return M.eval(match.expr, ctx)
+    local expr_str = match.expr
+    if type(expr_str) == "string" then
+        expr_str = trim(expr_str)
+    end
+    if expr_str and expr_str ~= "" then
+        return M.eval(expr_str, ctx)
     end
     return conditions.eval_tree(match, ctx)
 end
