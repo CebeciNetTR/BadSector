@@ -63,14 +63,21 @@ function _M.header_get(headers, name)
     if not headers or not name then
         return nil
     end
-    if headers[name] then
-        return headers[name]
-    end
-    local lower = name:lower()
-    for k, v in pairs(headers) do
-        if type(k) == "string" and k:lower() == lower then
-            return v
+    local v = headers[name]
+    if not v then
+        local lower = name:lower()
+        for k, val in pairs(headers) do
+            if type(k) == "string" and k:lower() == lower then
+                v = val
+                break
+            end
         end
+    end
+    if type(v) == "table" then
+        v = v[1]
+    end
+    if type(v) == "string" and v ~= "" then
+        return v
     end
     return nil
 end

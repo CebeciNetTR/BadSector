@@ -1,11 +1,44 @@
 --[[
-  Resolve the original client IP when BadSector sits behind HAProxy or another proxy.
+  Resolve the original client IP when BadSector sits behind HAProxy, Cloudflare, etc.
+  Header values may be a string or a table (duplicate headers in OpenResty).
 ]]
 
 local _M = {}
 
 local function trim(s)
-    return (s:match("^%s*(.-)%s*$"))
+    if not s or type(s) ~= "string" then
+        return ""
+    end
+    return (s:match("^%s*(.-)%s*$")) or ""
+end
+
+--- Normalize ngx header value to a single string.
+local function header_string(value)
+    if value == nil then
+        return nil
+    end
+    if type(value) == "table" then
+        value = value[1]
+    end
+    if type(value) ~= "string" then
+        value = tostring(value)
+    end
+    local s = trim(value)
+    if s == "" then
+        return nil
+    end
+    return s
+end
+
+local function header_value(headers, ...)
+    for i = 1, select("#", ...) do
+        local name = select(i, ...)
+        local v = header_string(headers[name])
+        if v then
+            return v
+        end
+    end
+    return nil
 end
 
 local function is_private(ip)
@@ -27,37 +60,43 @@ local function is_private(ip)
     return false
 end
 
---- Leftmost public IP in X-Forwarded-For, else first entry, else X-Real-IP, else remote_addr.
+local function first_ip_from_xff(xff)
+    local first, first_public
+    for part in xff:gmatch("[^,]+") do
+        local ip = trim(part)
+        if ip ~= "" then
+            first = first or ip
+            if not is_private(ip) then
+                first_public = ip
+                break
+            end
+        end
+    end
+    return first_public or first
+end
+
+--- Client IP: CF-Connecting-IP (Cloudflare) → X-Forwarded-For → X-Real-IP → remote_addr.
 ---@return string
 function _M.from_request()
     local headers = ngx.req.get_headers()
-    local xff = headers["X-Forwarded-For"] or headers["x-forwarded-for"]
-    if xff and xff ~= "" then
-        local first, first_public
-        for part in xff:gmatch("[^,]+") do
-            local ip = trim(part)
-            if ip and ip ~= "" then
-                first = first or ip
-                if not is_private(ip) then
-                    first_public = ip
-                    break
-                end
-            end
-        end
-        if first_public then
-            return first_public
-        end
-        if first then
-            return first
+
+    -- Cloudflare (orange cloud) sends the visitor IP here.
+    local cf_ip = header_value(headers, "CF-Connecting-IP", "cf-connecting-ip")
+    if cf_ip then
+        return cf_ip
+    end
+
+    local xff = header_value(headers, "X-Forwarded-For", "x-forwarded-for")
+    if xff then
+        local ip = first_ip_from_xff(xff)
+        if ip then
+            return ip
         end
     end
 
-    local real = headers["X-Real-IP"] or headers["x-real-ip"]
-    if real and real ~= "" then
-        real = trim(real)
-        if real ~= "" then
-            return real
-        end
+    local real = header_value(headers, "X-Real-IP", "x-real-ip")
+    if real then
+        return real
     end
 
     return ngx.var.remote_addr or ""
