@@ -1,5 +1,5 @@
 import type { SiteFormData } from '../../types/site'
-import { DEFAULT_BACKEND_URL, inputToHosts } from '../../types/site'
+import { DEFAULT_BACKEND_URL, canonicalHostHint, inputToHosts } from '../../types/site'
 
 interface Props {
   form: SiteFormData
@@ -23,6 +23,8 @@ export default function SiteForm({
   const updateSettings = (patch: Partial<SiteFormData['settings']>) => {
     onChange({ ...form, settings: { ...form.settings, ...patch } })
   }
+
+  const canonicalHint = canonicalHostHint(form.hosts, form.settings.canonical_host)
 
   return (
     <div className="card">
@@ -81,8 +83,10 @@ export default function SiteForm({
           </select>
           <span className="field-hint">
             Ziyaretçi yanlış hostname ile gelirse BadSector edge 301 ile canonical adrese yönlendirir.
-            Hosts listesinde hem apex hem www tanımlı olmalı.
+            Yalnızca <code>example.com</code> + <code>www.example.com</code> birlikte tanımlıysa geçerlidir.
+            Alt alan adları (ör. <code>trend.example.com</code>) için <strong>Yok</strong> kullanın.
           </span>
+          {canonicalHint && <p className="field-warning">{canonicalHint}</p>}
         </label>
 
         <label className="field">

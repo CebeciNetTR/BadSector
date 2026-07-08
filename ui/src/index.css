@@ -389,6 +389,12 @@ textarea {
   color: var(--muted);
 }
 
+.field-warning {
+  font-size: 0.8125rem;
+  color: #fbbf24;
+  margin: 0.35rem 0 0;
+}
+
 /* Pipeline summary */
 .pipeline-flow {
   display: flex;

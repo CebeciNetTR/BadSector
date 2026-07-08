@@ -122,6 +122,22 @@ export function inputToHosts(input: string): string[] {
     .filter(Boolean)
 }
 
+/** True when hosts include both apex and www.example.com pair. */
+export function hasApexWwwPair(hosts: string[]): boolean {
+  const set = new Set(hosts.map((h) => h.trim().toLowerCase()).filter(Boolean))
+  for (const h of set) {
+    if (h.startsWith('www.')) continue
+    if (set.has(`www.${h}`)) return true
+  }
+  return false
+}
+
+export function canonicalHostHint(hosts: string[], mode: CanonicalHostMode | undefined): string | null {
+  if (!mode || mode === 'none') return null
+  if (hasApexWwwPair(hosts)) return null
+  return 'Canonical yönlendirme yalnızca apex + www çifti olan sitelerde çalışır (ör. example.com ve www.example.com). Alt alan adları için "Yok" seçin.'
+}
+
 export function siteToForm(site: Site, pipeline: PipelineStage[] = []): SiteFormData {
   return {
     name: site.name,

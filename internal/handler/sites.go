@@ -40,6 +40,13 @@ func (h *Handler) createSite(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "at least one host is required")
 	}
 
+	normalized := normalizeHosts(req.Hosts)
+	if conflict, err := h.findHostConflict("", normalized); err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	} else if conflict != "" {
+		return echo.NewHTTPError(http.StatusConflict, conflict)
+	}
+
 	backendURL := normalizeBackendURL(req.BackendURL)
 	if backendURL == "" {
 		backendURL = db.DefaultBackendURL()
@@ -51,7 +58,7 @@ func (h *Handler) createSite(c echo.Context) error {
 	}
 
 	settingsJSON, _ := json.Marshal(settings)
-	hostsJSON, _ := json.Marshal(normalizeHosts(req.Hosts))
+	hostsJSON, _ := json.Marshal(normalized)
 
 	site := db.Site{
 		ID:       db.NewID(),
@@ -117,6 +124,11 @@ func (h *Handler) updateSite(c echo.Context) error {
 		if len(hosts) == 0 {
 			return echo.NewHTTPError(http.StatusBadRequest, "at least one host is required")
 		}
+		if conflict, err := h.findHostConflict(site.ID, hosts); err != nil {
+			return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		} else if conflict != "" {
+			return echo.NewHTTPError(http.StatusConflict, conflict)
+		}
 		hostsJSON, _ := json.Marshal(hosts)
 		site.Hosts = string(hostsJSON)
 	}
@@ -175,6 +187,41 @@ func normalizeHosts(hosts []string) []string {
 		out = append(out, h)
 	}
 	return out
+}
+
+func parseStoredHosts(raw string) []string {
+	if raw == "" {
+		return nil
+	}
+	var hosts []string
+	if err := json.Unmarshal([]byte(raw), &hosts); err != nil {
+		return nil
+	}
+	return normalizeHosts(hosts)
+}
+
+func (h *Handler) findHostConflict(excludeSiteID string, hosts []string) (string, error) {
+	want := map[string]bool{}
+	for _, host := range hosts {
+		want[host] = true
+	}
+
+	var sites []db.Site
+	if err := h.db.Find(&sites).Error; err != nil {
+		return "", err
+	}
+
+	for _, site := range sites {
+		if site.ID == excludeSiteID {
+			continue
+		}
+		for _, existing := range parseStoredHosts(site.Hosts) {
+			if want[existing] {
+				return "hostname " + existing + " is already used by site \"" + site.Name + "\"", nil
+			}
+		}
+	}
+	return "", nil
 }
 
 func normalizeBackendURL(raw string) string {
