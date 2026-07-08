@@ -35,6 +35,7 @@ function _M.run(site)
             ngx.log(ngx.ERR, "badsector: module error [", stage.module, "]: ", result)
             ctx:trace(stage.module, decision.BLOCK, "module error")
             ctx:set_decision(decision.block(500, "Internal Server Error"))
+            executor.apply(ctx)
             return ctx
         end
 

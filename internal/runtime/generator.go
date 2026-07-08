@@ -101,6 +101,10 @@ func (g *Generator) compileSite(database *gorm.DB, site db.Site) (RuntimeSite, e
 			cfg["rules"] = rules
 		}
 
+		if stage.Module == "custom_rules" {
+			sanitizeCustomRulesConfig(cfg)
+		}
+
 		pipeline = append(pipeline, RuntimePipelineStage{
 			Module:  stage.Module,
 			Enabled: stage.Enabled,
@@ -145,6 +149,25 @@ func (g *Generator) compilePolicies(database *gorm.DB, siteID string) ([]map[str
 		})
 	}
 	return rules, nil
+}
+
+// Strip UI-only fields (_builder) from custom rule matches before engine runtime.
+func sanitizeCustomRulesConfig(cfg map[string]interface{}) {
+	rawRules, ok := cfg["rules"].([]interface{})
+	if !ok {
+		return
+	}
+	for _, raw := range rawRules {
+		rule, ok := raw.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		match, ok := rule["match"].(map[string]interface{})
+		if !ok {
+			continue
+		}
+		delete(match, "_builder")
+	}
 }
 
 func (g *Generator) writeSites(sites []RuntimeSite) error {

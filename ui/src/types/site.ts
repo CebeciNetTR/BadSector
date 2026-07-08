@@ -5,6 +5,8 @@ export interface SiteSettings {
   live_trace?: boolean
   /** Send X-Country-Code / X-Geo-* headers to the origin backend (default: on). */
   origin_geo_headers?: boolean
+  /** Override Host header sent to origin (e.g. subdomain edge -> apex Apache vhost). */
+  origin_host?: string
   /** Edge redirect: force apex or www (301 to HTTPS). Both hostnames must be listed in Hosts. */
   canonical_host?: CanonicalHostMode
 }

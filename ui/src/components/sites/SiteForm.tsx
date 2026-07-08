@@ -68,6 +68,24 @@ export default function SiteForm({
         </label>
 
         <label className="field span-2">
+          <span>Origin Host header (opsiyonel)</span>
+          <input
+            type="text"
+            placeholder="Örn: koleksi1001resepi.com — Apache/cPanel vhost eşleşmesi için"
+            value={form.settings.origin_host ?? ''}
+            onChange={(e) =>
+              updateSettings({
+                origin_host: e.target.value.trim() || undefined,
+              })
+            }
+          />
+          <span className="field-hint">
+            Alt alan adı ayrı site olarak edge&apos;de kalır; origin&apos;e giden <code>Host</code> header&apos;ını
+            ana domain veya mevcut vhost adına yönlendirmek için kullanın.
+          </span>
+        </label>
+
+        <label className="field span-2">
           <span>Canonical URL (edge yönlendirme)</span>
           <select
             value={form.settings.canonical_host ?? 'none'}

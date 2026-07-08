@@ -31,7 +31,10 @@ function _M.load(runtime_path)
 
     for _, site in ipairs(sites) do
         for _, host in ipairs(site.hosts or {}) do
-            sites_by_host[host] = site
+            local key = host and string.lower(host) or ""
+            if key ~= "" then
+                sites_by_host[key] = site
+            end
         end
     end
 end
@@ -40,7 +43,10 @@ end
 ---@param host string
 ---@return table|nil
 function _M.resolve(host)
-    return sites_by_host[host]
+    if not host or host == "" then
+        return nil
+    end
+    return sites_by_host[string.lower(host)]
 end
 
 --- Get all loaded sites.

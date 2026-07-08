@@ -19,6 +19,15 @@ end
 function _M.apply(ctx, settings)
     settings = settings or {}
 
+    -- Optional: send a different Host header to origin (e.g. subdomain site -> apex vhost).
+    local origin_host = settings.origin_host
+    if type(origin_host) == "string" then
+        origin_host = origin_host:match("^%s*(.-)%s*$")
+        if origin_host ~= "" then
+            ngx.req.set_header("Host", origin_host)
+        end
+    end
+
     -- Always mark edge-proxied requests (even if geo headers disabled).
     set_var("badsector_edge", "1")
     ngx.req.set_header("X-BadSector-Edge", "1")
