@@ -3,6 +3,8 @@ export type CanonicalHostMode = 'none' | 'apex' | 'www'
 export interface SiteSettings {
   debug_trace?: boolean
   live_trace?: boolean
+  /** Send X-Country-Code / X-Geo-* headers to the origin backend (default: on). */
+  origin_geo_headers?: boolean
   /** Edge redirect: force apex or www (301 to HTTPS). Both hostnames must be listed in Hosts. */
   canonical_host?: CanonicalHostMode
 }

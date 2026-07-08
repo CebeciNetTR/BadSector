@@ -105,6 +105,17 @@ export default function SiteForm({
             <option value="yes">Açık — X-BadSector-Trace header</option>
           </select>
         </label>
+
+        <label className="field">
+          <span>Origin GeoIP header</span>
+          <select
+            value={form.settings.origin_geo_headers !== false ? 'yes' : 'no'}
+            onChange={(e) => updateSettings({ origin_geo_headers: e.target.value === 'yes' })}
+          >
+            <option value="yes">Açık — X-Country-Code, X-Geo-*</option>
+            <option value="no">Kapalı</option>
+          </select>
+        </label>
       </div>
 
       <div className="rule-preview" style={{ marginTop: '1rem' }}>

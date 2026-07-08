@@ -57,6 +57,8 @@ function _M.handle()
     end
 
     if ctx.decision and ctx.decision.action == "ALLOW" then
+        local origin_headers = require("badsector.origin_headers")
+        origin_headers.apply(ctx, settings)
         return
     end
 end
