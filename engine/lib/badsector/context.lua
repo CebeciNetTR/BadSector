@@ -6,6 +6,7 @@
 ]]
 
 local ngx_now = ngx.now
+local client_ip = require("badsector.client_ip")
 
 local RequestContext = {}
 RequestContext.__index = RequestContext
@@ -30,7 +31,7 @@ function RequestContext.new(site)
             body_size = tonumber(ngx.var.content_length) or 0,
             scheme = ngx.var.scheme,
             host = ngx.var.host,
-            remote_addr = ngx.var.remote_addr,
+            remote_addr = client_ip.from_request(),
             remote_port = tonumber(ngx.var.remote_port),
         },
         site = site,
