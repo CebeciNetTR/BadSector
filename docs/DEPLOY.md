@@ -109,23 +109,44 @@ docker compose up -d --build
 
 ---
 
-## 4. Güncelleme (sunucuda — tek komut)
+## 4. Güncelleme (sunucuda)
+
+**Normal (hızlı — önerilen):**
 
 ```bash
 cd /opt/badsector
 bash scripts/update-server.sh
 ```
 
-Script sırası: `git pull` → `setup-dev-data.sh` → `fix-certs-layout.sh` (PEM doğrulama) → `haproxy engine api worker ui` rebuild → health kontrol.
+- Git: `fetch` + **fast-forward merge** (saniyeler). `reset --hard` yalnızca sunucuda izlenen dosyada yerel değişiklik varsa otomatik devreye girer.
+- Docker: **cache kullanır**, yalnızca değişen servisleri rebuild eder (`engine/` → engine+haproxy, `ui/` → ui, vb.).
 
-Manuel güncelleme:
+**Tam rebuild (yavaş — Dockerfile / bağımlılık değişince):**
+
+```bash
+bash scripts/update-server.sh --full
+```
+
+**Zorunlu hard reset (sunucuda tracked dosya oynandıysa):**
+
+```bash
+bash scripts/update-server.sh --hard-reset
+```
+
+**Tek servis:**
+
+```bash
+bash scripts/update-server.sh --services engine,api
+```
+
+Manuel güncelleme (eski, yavaş yol — gerek yok):
 
 ```bash
 cd /opt/badsector
 git pull origin main
 bash scripts/setup-dev-data.sh
 bash scripts/fix-certs-layout.sh
-docker-compose build --no-cache haproxy engine api worker ui
+docker-compose build haproxy engine api worker ui
 docker-compose up -d --build
 docker-compose ps
 ```
