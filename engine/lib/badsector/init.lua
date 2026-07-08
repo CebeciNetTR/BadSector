@@ -160,16 +160,6 @@ function _M.handle()
 
 
 
-    local canonical = require("badsector.canonical")
-
-    if canonical.enforce(site, host) then
-
-        return
-
-    end
-
-
-
     local ctx = pipeline.run(site)
 
     local settings = site.settings or {}
@@ -205,6 +195,16 @@ function _M.handle()
 
 
     if d.action == "ALLOW" then
+
+        local canonical = require("badsector.canonical")
+
+        if canonical.enforce(site, host) then
+
+            return
+
+        end
+
+
 
         ensure_backend(site)
 
