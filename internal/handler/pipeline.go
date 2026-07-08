@@ -65,6 +65,9 @@ func (h *Handler) updatePipeline(c echo.Context) error {
 		if cfg == "" {
 			cfg = existingConfig[in.Module]
 		}
+		if existing, ok := existingConfig[in.Module]; ok {
+			cfg = mergeStageConfig(in.Module, cfg, existing)
+		}
 		if cfg == "" {
 			cfg = defaultModuleConfig(in.Module)
 		}
@@ -87,7 +90,9 @@ func (h *Handler) updatePipeline(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
-	_ = h.regenerate()
+	if err := h.regenerate(); err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "runtime reload failed: "+err.Error())
+	}
 	return c.JSON(http.StatusOK, stages)
 }
 

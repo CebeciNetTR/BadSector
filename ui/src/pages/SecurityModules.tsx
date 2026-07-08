@@ -143,6 +143,7 @@ export default function SecurityModules() {
       }
       setDirty(false)
       setSuccess('Kaydedildi ve engine reload tetiklendi.')
+      await loadAll(siteId)
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Kaydetme başarısız')
     } finally {

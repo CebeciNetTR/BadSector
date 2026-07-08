@@ -104,7 +104,9 @@ func (h *Handler) regenerate() error {
 		return err
 	}
 	if h.reloader != nil {
-		_ = h.reloader.Reload()
+		if err := h.reloader.Reload(); err != nil {
+			return err
+		}
 	}
 	return nil
 }

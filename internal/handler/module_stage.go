@@ -131,7 +131,9 @@ func (h *Handler) updateModuleStage(c echo.Context, module string, defaultConfig
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
-	_ = h.regenerate()
+	if err := h.regenerate(); err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "runtime reload failed: "+err.Error())
+	}
 
 	return c.JSON(http.StatusOK, moduleStageResponse{
 		Enabled: req.Enabled,
