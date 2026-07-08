@@ -100,6 +100,8 @@ end
 --- Hot reload module configurations.
 ---@param sites table[] Updated site configurations
 function _M.reload(sites)
+    local geoip_db = require("badsector.geoip_db")
+    geoip_db.reset()
     for _, site in ipairs(sites or {}) do
         for _, stage in ipairs(site.pipeline or {}) do
             local mod = _M.load_module(stage.module)

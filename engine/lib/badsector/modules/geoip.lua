@@ -38,7 +38,7 @@ function M.reload(config)
     if db then
         country_db = db
     else
-        ngx.log(ngx.NOTICE, "badsector geoip: ", err or "country db unavailable")
+        ngx.log(ngx.WARN, "badsector geoip: ", err or "country db unavailable")
     end
 end
 
@@ -57,14 +57,21 @@ end
 
 local function lookup_mmdb(ip)
     if not country_db then
-        return nil
+        return nil, "database not loaded"
     end
-    local res = geoip_db.lookup(country_db, ip)
+    local res, err = geoip_db.lookup(country_db, ip)
     if not res then
-        return nil
+        return nil, err or "lookup failed"
+    end
+    local cc = res.country and res.country.iso_code
+    if not cc and res.registered_country then
+        cc = res.registered_country.iso_code
+    end
+    if not cc then
+        return nil, "no country in record"
     end
     return {
-        country = res.country and res.country.iso_code,
+        country = cc,
         city = res.city and res.city.names and res.city.names.en,
         latitude = res.location and res.location.latitude,
         longitude = res.location and res.location.longitude,
@@ -89,11 +96,13 @@ function M.run(ctx, config)
         M.reload(config)
     end
 
+    local lookup_err
     ctx:ensure("geo", function()
-        local geo = lookup_mmdb(ctx.request.remote_addr)
+        local geo, err = lookup_mmdb(ctx.request.remote_addr)
         if geo then
             return geo
         end
+        lookup_err = err
         return header_fallback(ctx.request.headers)
     end)
 
@@ -104,7 +113,14 @@ function M.run(ctx, config)
             ctx:trace("geoip", decision.BLOCK, "Country unknown")
             return decision.block(403, "Access denied")
         end
-        ctx:trace("geoip", decision.CONTINUE, "Geo lookup unavailable")
+        local detail = "Geo lookup unavailable"
+        if lookup_err then
+            detail = detail .. ": " .. lookup_err
+        end
+        if ctx.request.remote_addr == "127.0.0.1" or ctx.request.remote_addr == "::1" then
+            detail = detail .. " (localhost has no GeoIP; test from browser or set X-Forwarded-For)"
+        end
+        ctx:trace("geoip", decision.CONTINUE, detail)
         return decision.CONTINUE
     end
 
