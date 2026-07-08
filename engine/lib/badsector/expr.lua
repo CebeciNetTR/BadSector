@@ -177,6 +177,13 @@ function M.eval(expr, ctx)
 
     expr = trim(expr)
 
+    if expr:sub(1, 4) == "not " then
+        local inner = trim(expr:sub(5))
+        if inner:sub(1, 1) == "(" and inner:sub(-1) == ")" then
+            return not M.eval(inner:sub(2, -2), ctx)
+        end
+    end
+
     local or_parts = split_top_level(expr, " or ")
     if #or_parts > 1 then
         for _, part in ipairs(or_parts) do

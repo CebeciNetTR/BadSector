@@ -83,6 +83,8 @@ export interface CustomRuleAction {
 
 export interface CustomRuleMatch {
   expr?: string
+  /** UI-only: visual builder state (engine ignores). */
+  _builder?: import('./customRuleBuilder').CustomRuleBuilderState
   operator?: 'and' | 'or'
   conditions?: Array<Record<string, unknown>>
 }

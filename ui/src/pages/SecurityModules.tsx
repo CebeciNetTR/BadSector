@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { api, ApiError } from '../api/client'
 import { parseHosts, type Site } from '../types/site'
+import CustomRulesPanel from '../components/customRules/CustomRulesPanel'
 import {
   defaultAsnConfig,
   defaultBurstDetectionConfig,
@@ -10,11 +11,9 @@ import {
   defaultGeoipConfig,
   defaultHeaderValidationConfig,
   defaultJsChallengeConfig,
-  newCustomRule,
   type AsnConfig,
   type BurstDetectionConfig,
   type CookieChallengeConfig,
-  type CustomRule,
   type CustomRulesConfig,
   type GeoipConfig,
   type GeoipStatus,
@@ -331,112 +330,12 @@ export default function SecurityModules() {
           )}
 
           {tab === 'custom_rules' && (
-            <div className="card form-grid">
-              <label className="checkbox-row">
-                <input type="checkbox" checked={customRulesEnabled} onChange={(e) => { setCustomRulesEnabled(e.target.checked); markDirty() }} />
-                Modül etkin
-              </label>
-              <label className="checkbox-row">
-                <input type="checkbox" checked={customRules.fail_open} onChange={(e) => { setCustomRules({ ...customRules, fail_open: e.target.checked }); markDirty() }} />
-                Fail open (eval hatasında devam et)
-              </label>
-              <p className="empty-state">
-                Güvenli ifade dili — ham Lua çalıştırılmaz. Örnek:{' '}
-                <code>path.starts_with(&quot;/admin&quot;) and country in [&quot;TR&quot;]</code>
-              </p>
-              {customRules.rules.map((rule, idx) => (
-                <div key={rule.id} className="card" style={{ marginTop: '0.5rem' }}>
-                  <label className="checkbox-row">
-                    <input
-                      type="checkbox"
-                      checked={rule.enabled !== false}
-                      onChange={(e) => {
-                        const rules = [...customRules.rules]
-                        rules[idx] = { ...rule, enabled: e.target.checked }
-                        setCustomRules({ ...customRules, rules })
-                        markDirty()
-                      }}
-                    />
-                    Etkin — {rule.name}
-                  </label>
-                  <label>
-                    Ad
-                    <input
-                      value={rule.name}
-                      onChange={(e) => {
-                        const rules = [...customRules.rules]
-                        rules[idx] = { ...rule, name: e.target.value }
-                        setCustomRules({ ...customRules, rules })
-                        markDirty()
-                      }}
-                    />
-                  </label>
-                  <label>
-                    İfade (expr)
-                    <input
-                      value={rule.match.expr ?? ''}
-                      onChange={(e) => {
-                        const rules = [...customRules.rules]
-                        rules[idx] = { ...rule, match: { ...rule.match, expr: e.target.value } }
-                        setCustomRules({ ...customRules, rules })
-                        markDirty()
-                      }}
-                    />
-                  </label>
-                  <label>
-                    Aksiyon
-                    <select
-                      value={rule.action.type}
-                      onChange={(e) => {
-                        const rules = [...customRules.rules]
-                        rules[idx] = { ...rule, action: { ...rule.action, type: e.target.value as CustomRule['action']['type'] } }
-                        setCustomRules({ ...customRules, rules })
-                        markDirty()
-                      }}
-                    >
-                      <option value="block">Block</option>
-                      <option value="allow">Allow</option>
-                      <option value="rate_limit">Rate Limit</option>
-                      <option value="redirect">Redirect</option>
-                      <option value="log">Log only</option>
-                    </select>
-                  </label>
-                  {rule.action.type === 'block' && (
-                    <label>
-                      HTTP status
-                      <input
-                        type="number"
-                        value={rule.action.status ?? 403}
-                        onChange={(e) => {
-                          const rules = [...customRules.rules]
-                          rules[idx] = { ...rule, action: { ...rule.action, status: Number(e.target.value) } }
-                          setCustomRules({ ...customRules, rules })
-                          markDirty()
-                        }}
-                      />
-                    </label>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setCustomRules({ ...customRules, rules: customRules.rules.filter((_, i) => i !== idx) })
-                      markDirty()
-                    }}
-                  >
-                    Kuralı sil
-                  </button>
-                </div>
-              ))}
-              <button
-                type="button"
-                onClick={() => {
-                  setCustomRules({ ...customRules, rules: [...customRules.rules, newCustomRule()] })
-                  markDirty()
-                }}
-              >
-                + Kural ekle
-              </button>
-            </div>
+            <CustomRulesPanel
+              enabled={customRulesEnabled}
+              config={customRules}
+              onEnabledChange={(v) => { setCustomRulesEnabled(v); markDirty() }}
+              onConfigChange={(c) => { setCustomRules(c); markDirty() }}
+            />
           )}
 
           {tab === 'burst' && (
