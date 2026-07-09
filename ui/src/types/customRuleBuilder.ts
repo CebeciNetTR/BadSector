@@ -2,6 +2,7 @@
 
 export type RuleField =
   | 'path'
+  | 'query'
   | 'method'
   | 'host'
   | 'ip'
@@ -23,6 +24,8 @@ export type RuleOperator =
   | 'not_in_list'
   | 'is_true'
   | 'is_false'
+  | 'is_empty'
+  | 'is_not_empty'
 
 export interface VisualCondition {
   id: string
@@ -39,6 +42,7 @@ export interface CustomRuleBuilderState {
 
 export const RULE_FIELD_LABELS: Record<RuleField, string> = {
   path: 'URL yolu (path)',
+  query: 'Query string (? sonrası)',
   method: 'HTTP metodu',
   host: 'Host',
   ip: 'İstemci IP',
@@ -51,6 +55,7 @@ export const RULE_FIELD_LABELS: Record<RuleField, string> = {
 
 export const RULE_FIELD_HINTS: Record<RuleField, string> = {
   path: 'Örn: /wp-admin, /api/*',
+  query: 'Boş = parametresiz ana sayfa. utm, fbclid vb.',
   method: 'GET, POST, …',
   host: 'www.example.com',
   ip: '1.2.3.4',
@@ -62,7 +67,8 @@ export const RULE_FIELD_HINTS: Record<RuleField, string> = {
 }
 
 export const OPERATORS_BY_FIELD: Record<RuleField, RuleOperator[]> = {
-  path: ['contains', 'not_contains', 'starts_with', 'not_starts_with', 'equals', 'not_equals', 'matches'],
+  path: ['contains', 'not_contains', 'starts_with', 'not_starts_with', 'equals', 'not_equals', 'matches', 'is_empty', 'is_not_empty'],
+  query: ['equals', 'not_equals', 'contains', 'not_contains', 'is_empty', 'is_not_empty'],
   method: ['equals', 'not_equals', 'in_list', 'not_in_list'],
   host: ['equals', 'not_equals', 'contains', 'starts_with'],
   ip: ['equals', 'not_equals', 'in_list'],
@@ -85,6 +91,8 @@ export const OPERATOR_LABELS: Record<RuleOperator, string> = {
   not_in_list: 'listedekilerden biri değil',
   is_true: 'doğru (evet)',
   is_false: 'doğru değil (hayır)',
+  is_empty: 'boş',
+  is_not_empty: 'boş değil',
 }
 
 export interface RuleTemplate {
@@ -104,15 +112,18 @@ export const RULE_TEMPLATES: RuleTemplate[] = [
     id: 'homepage-only-lockdown',
     name: 'Acil mod — sadece ana sayfa (444)',
     description:
-      'Yalnızca / geçer (domain.com ve domain.com/). Diğer tüm yollar 444 ile kapatılır — ağır saldırı / lockdown modu.',
+      'Yalnızca tam ana sayfa geçer: path=/ ve query yok (domain.com veya domain.com/ — ?utm vb. yok). Diğer her şey 444.',
     rule: {
       name: 'Homepage only lockdown',
       priority: 10,
       match: {
-        expr: 'path != "/"',
+        expr: 'path != "/" or query != ""',
         _builder: {
-          logic: 'and',
-          conditions: [{ id: 'c1', field: 'path', operator: 'not_equals', value: '/' }],
+          logic: 'or',
+          conditions: [
+            { id: 'c1', field: 'path', operator: 'not_equals', value: '/' },
+            { id: 'c2', field: 'query', operator: 'is_not_empty', value: '' },
+          ],
         },
       },
       action: { type: 'return_444' },

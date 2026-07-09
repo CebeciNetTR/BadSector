@@ -49,15 +49,21 @@ function conditionToExpr(c: VisualCondition): string | null {
       return `${f} == true`
     case 'is_false':
       return `${f} != true`
+    case 'is_empty':
+      return `${f} == ""`
+    case 'is_not_empty':
+      return `${f} != ""`
     case 'equals':
-      if (!v && c.field !== 'trusted_bot') return null
+      if (!v && c.field !== 'trusted_bot' && c.field !== 'query') return null
+      if (!v && c.field === 'query') return `${f} == ""`
       return `${f} == "${escapeString(v)}"`
     case 'not_equals':
+      if (!v && c.field === 'query') return `${f} != ""`
       if (!v) return null
       return `${f} != "${escapeString(v)}"`
     case 'contains':
       if (!v) return null
-      if (c.field === 'path' || c.field === 'ua' || c.field === 'host' || c.field === 'header') {
+      if (c.field === 'path' || c.field === 'ua' || c.field === 'host' || c.field === 'header' || c.field === 'query') {
         return `${f} contains "${escapeString(v)}"`
       }
       return `${f}.contains("${escapeString(v)}")`
@@ -185,7 +191,7 @@ function mapField(raw: string): RuleField {
   if (raw.startsWith('header.')) return 'header'
   if (raw === 'user_agent') return 'ua'
   const f = raw as RuleField
-  if (['path', 'method', 'host', 'ip', 'ua', 'country', 'asn', 'trusted_bot'].includes(f)) return f
+  if (['path', 'method', 'host', 'ip', 'ua', 'country', 'asn', 'trusted_bot', 'query'].includes(f)) return f
   return 'path'
 }
 

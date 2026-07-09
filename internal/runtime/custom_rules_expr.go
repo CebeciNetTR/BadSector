@@ -68,12 +68,22 @@ func conditionToExpr(c map[string]interface{}) string {
 		return fmt.Sprintf("%s == true", f)
 	case "is_false":
 		return fmt.Sprintf("%s != true", f)
+	case "is_empty":
+		return fmt.Sprintf(`%s == ""`, f)
+	case "is_not_empty":
+		return fmt.Sprintf(`%s != ""`, f)
 	case "equals":
+		if value == "" && field == "query" {
+			return fmt.Sprintf(`%s == ""`, f)
+		}
 		if value == "" && field != "trusted_bot" {
 			return ""
 		}
 		return fmt.Sprintf(`%s == "%s"`, f, escaped)
 	case "not_equals":
+		if value == "" && field == "query" {
+			return fmt.Sprintf(`%s != ""`, f)
+		}
 		if value == "" {
 			return ""
 		}
@@ -82,7 +92,7 @@ func conditionToExpr(c map[string]interface{}) string {
 		if value == "" {
 			return ""
 		}
-		if field == "path" || field == "ua" || field == "host" || field == "header" {
+		if field == "path" || field == "ua" || field == "host" || field == "header" || field == "query" {
 			return fmt.Sprintf(`%s contains "%s"`, f, escaped)
 		}
 		return fmt.Sprintf(`%s.contains("%s")`, f, escaped)

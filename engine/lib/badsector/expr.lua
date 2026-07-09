@@ -129,6 +129,9 @@ local function field_value(field, ctx)
         end
         return p
     end
+    if field == "query" or field == "query_string" then
+        return (ctx.request and ctx.request.query) or ngx.var.query_string or ""
+    end
     if field == "method" then return ctx.request.method or "" end
     if field == "host" then return ctx.request.host or "" end
     if field == "ip" then return ctx.request.remote_addr or "" end
@@ -191,7 +194,7 @@ local function eval_atom(atom, ctx)
             return val:sub(1, #arg) == arg
         end
         if op == "contains" then
-            local ci = (f == "path" or f == "host" or f == "ua" or f == "user_agent")
+            local ci = (f == "path" or f == "host" or f == "ua" or f == "user_agent" or f == "query" or f == "query_string")
             return str_contains(val, arg, ci)
         end
         if op == "matches" or op == "regex" then
@@ -205,7 +208,7 @@ local function eval_atom(atom, ctx)
     f, op, arg = atom:match("^([%w_%.%-]+)%s+contains%s+(.+)$")
     if f and arg then
         local val = field_value(f, ctx)
-        local ci = (f == "path" or f == "host" or f == "ua" or f == "user_agent")
+        local ci = (f == "path" or f == "host" or f == "ua" or f == "user_agent" or f == "query" or f == "query_string")
         return str_contains(val, arg, ci)
     end
 
