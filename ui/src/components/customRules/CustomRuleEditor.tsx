@@ -103,6 +103,7 @@ export default function CustomRuleEditor({ rule, onChange, onDelete }: Props) {
             onChange={(e) => updateAction({ type: e.target.value as CustomRuleActionType })}
           >
             <option value="block">Engelle (Block)</option>
+            <option value="return_444">444 — bağlantı kapat (lockdown)</option>
             <option value="allow">İzin ver (Allow)</option>
             <option value="rate_limit">Rate limit</option>
             <option value="redirect">Yönlendir</option>
@@ -260,7 +261,7 @@ export function applyTemplate(templateId: string): CustomRule | null {
     id: `rule-${Date.now()}`,
     name: t.rule.name,
     enabled: true,
-    priority: 100,
+    priority: t.rule.priority ?? 100,
     match: { ...t.rule.match },
     action: { ...t.rule.action },
   }

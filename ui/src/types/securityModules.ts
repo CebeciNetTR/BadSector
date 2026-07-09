@@ -70,7 +70,14 @@ export interface CookieChallengeConfig {
   cookie_ttl: number
 }
 
-export type CustomRuleActionType = 'block' | 'allow' | 'rate_limit' | 'redirect' | 'continue' | 'log'
+export type CustomRuleActionType =
+  | 'block'
+  | 'allow'
+  | 'rate_limit'
+  | 'redirect'
+  | 'continue'
+  | 'log'
+  | 'return_444'
 
 export interface CustomRuleAction {
   type: CustomRuleActionType

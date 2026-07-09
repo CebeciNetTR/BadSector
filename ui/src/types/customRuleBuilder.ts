@@ -93,12 +93,31 @@ export interface RuleTemplate {
   description: string
   rule: {
     name: string
+    priority?: number
     match: { expr: string; _builder: CustomRuleBuilderState }
-    action: { type: 'block'; status: number }
+    action: { type: 'block'; status: number } | { type: 'return_444' }
   }
 }
 
 export const RULE_TEMPLATES: RuleTemplate[] = [
+  {
+    id: 'homepage-only-lockdown',
+    name: 'Acil mod — sadece ana sayfa (444)',
+    description:
+      'Yalnızca / geçer (domain.com ve domain.com/). Diğer tüm yollar 444 ile kapatılır — ağır saldırı / lockdown modu.',
+    rule: {
+      name: 'Homepage only lockdown',
+      priority: 10,
+      match: {
+        expr: 'path != "/"',
+        _builder: {
+          logic: 'and',
+          conditions: [{ id: 'c1', field: 'path', operator: 'not_equals', value: '/' }],
+        },
+      },
+      action: { type: 'return_444' },
+    },
+  },
   {
     id: 'wp-probe',
     name: 'WordPress tarama — bot hariç engelle',

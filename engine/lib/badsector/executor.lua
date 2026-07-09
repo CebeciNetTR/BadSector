@@ -32,6 +32,7 @@ function _M.apply(ctx)
         return ngx.exit(d.status or 403)
 
     elseif action == "RETURN_444" then
+        ngx.header["X-BadSector-Action"] = "block"
         return ngx.exit(444)
 
     elseif action == "REDIRECT" then

@@ -154,9 +154,11 @@ local function action_to_decision(action)
     if t == "return_444" then return decision.RETURN_444 end
 
     if t == "block" then
-
-        return decision.block(action.status or 403, action.body or "Forbidden")
-
+        local status = tonumber(action.status) or 403
+        if status == 444 then
+            return decision.RETURN_444
+        end
+        return decision.block(status, action.body or "Forbidden")
     end
 
     if t == "redirect" then return decision.redirect(action.url, action.status or 302) end
