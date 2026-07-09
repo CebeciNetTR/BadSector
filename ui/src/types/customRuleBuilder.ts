@@ -3,6 +3,7 @@
 export type RuleField =
   | 'path'
   | 'query'
+  | 'request_uri'
   | 'method'
   | 'host'
   | 'ip'
@@ -43,6 +44,7 @@ export interface CustomRuleBuilderState {
 export const RULE_FIELD_LABELS: Record<RuleField, string> = {
   path: 'URL yolu (path)',
   query: 'Query string (? sonrası)',
+  request_uri: 'Tam istek URI (path + ?query)',
   method: 'HTTP metodu',
   host: 'Host',
   ip: 'İstemci IP',
@@ -56,6 +58,7 @@ export const RULE_FIELD_LABELS: Record<RuleField, string> = {
 export const RULE_FIELD_HINTS: Record<RuleField, string> = {
   path: 'Örn: /wp-admin, /api/*',
   query: 'Boş = parametresiz ana sayfa. utm, fbclid vb.',
+  request_uri: 'Örn: / — yalnızca /. /1php, /?utm=… farklı URI sayılır',
   method: 'GET, POST, …',
   host: 'www.example.com',
   ip: '1.2.3.4',
@@ -69,6 +72,7 @@ export const RULE_FIELD_HINTS: Record<RuleField, string> = {
 export const OPERATORS_BY_FIELD: Record<RuleField, RuleOperator[]> = {
   path: ['contains', 'not_contains', 'starts_with', 'not_starts_with', 'equals', 'not_equals', 'matches', 'is_empty', 'is_not_empty'],
   query: ['equals', 'not_equals', 'contains', 'not_contains', 'is_empty', 'is_not_empty'],
+  request_uri: ['equals', 'not_equals', 'matches'],
   method: ['equals', 'not_equals', 'in_list', 'not_in_list'],
   host: ['equals', 'not_equals', 'contains', 'starts_with'],
   ip: ['equals', 'not_equals', 'in_list'],
@@ -86,7 +90,7 @@ export const OPERATOR_LABELS: Record<RuleOperator, string> = {
   not_contains: 'içermez',
   starts_with: 'ile başlar',
   not_starts_with: 'ile başlamaz',
-  matches: 'regex eşleşir',
+  matches: 'Lua pattern (regex değil)',
   in_list: 'listedeki değerlerden biri',
   not_in_list: 'listedekilerden biri değil',
   is_true: 'doğru (evet)',
@@ -112,17 +116,16 @@ export const RULE_TEMPLATES: RuleTemplate[] = [
     id: 'homepage-only-lockdown',
     name: 'Acil mod — sadece ana sayfa (444)',
     description:
-      'Yalnızca tam ana sayfa geçer: path=/ ve query yok (domain.com veya domain.com/ — ?utm vb. yok). Diğer her şey 444.',
+      'Yalnızca tam / geçer. /1php, /?utm=… vb. Lua pattern ile 444. (Engine: Lua pattern — PCRE değil.)',
     rule: {
       name: 'Homepage only lockdown',
       priority: 10,
       match: {
-        expr: 'path != "/" or query != ""',
+        expr: 'request_uri.matches("^/.")',
         _builder: {
-          logic: 'or',
+          logic: 'and',
           conditions: [
-            { id: 'c1', field: 'path', operator: 'not_equals', value: '/' },
-            { id: 'c2', field: 'query', operator: 'is_not_empty', value: '' },
+            { id: 'c1', field: 'request_uri', operator: 'matches', value: '^/.' },
           ],
         },
       },

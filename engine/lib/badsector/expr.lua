@@ -132,6 +132,9 @@ local function field_value(field, ctx)
     if field == "query" or field == "query_string" then
         return (ctx.request and ctx.request.query) or ngx.var.query_string or ""
     end
+    if field == "request_uri" or field == "request_uri_full" then
+        return (ctx.request and ctx.request.request_uri) or ngx.var.request_uri or ngx.var.uri or ""
+    end
     if field == "method" then return ctx.request.method or "" end
     if field == "host" then return ctx.request.host or "" end
     if field == "ip" then return ctx.request.remote_addr or "" end
@@ -198,6 +201,12 @@ local function eval_atom(atom, ctx)
             return str_contains(val, arg, ci)
         end
         if op == "matches" or op == "regex" then
+            if type(val) ~= "string" then
+                val = tostring(val or "")
+            end
+            if type(arg) ~= "string" then
+                arg = tostring(arg or "")
+            end
             return val:match(arg) ~= nil
         end
         if op == "eq" then

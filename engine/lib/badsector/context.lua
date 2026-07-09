@@ -18,6 +18,7 @@ function RequestContext.new(site)
     local headers = ngx.req.get_headers()
     local uri = ngx.var.uri or "/"
     local query = ngx.var.query_string or ""
+    local request_uri = ngx.var.request_uri or uri
 
     local self = setmetatable({
         request = {
@@ -26,6 +27,7 @@ function RequestContext.new(site)
             uri = uri,
             path = uri,
             query = query,
+            request_uri = request_uri,
             headers = headers,
             cookies = headers.cookie,
             body_size = tonumber(ngx.var.content_length) or 0,

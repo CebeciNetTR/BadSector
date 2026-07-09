@@ -191,7 +191,7 @@ function mapField(raw: string): RuleField {
   if (raw.startsWith('header.')) return 'header'
   if (raw === 'user_agent') return 'ua'
   const f = raw as RuleField
-  if (['path', 'method', 'host', 'ip', 'ua', 'country', 'asn', 'trusted_bot', 'query'].includes(f)) return f
+  if (['path', 'method', 'host', 'ip', 'ua', 'country', 'asn', 'trusted_bot', 'query', 'request_uri'].includes(f)) return f
   return 'path'
 }
 
