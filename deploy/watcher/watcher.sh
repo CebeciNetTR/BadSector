@@ -74,8 +74,8 @@ while true; do
         last_reset_day="$current_day"
     fi
 
-    # Esigi asan IP'leri al: ZRANGEBYSCORE bs:ip_hits <threshold> +inf
-    HIGH_HIT_IPS=$($REDIS ZRANGEBYSCORE bs:ip_hits "$BAN_THRESHOLD" +inf 2>/dev/null)
+    # Esigi asan IP'leri al ve satır sonu (\r) karakterlerini temizle
+    HIGH_HIT_IPS=$($REDIS ZRANGEBYSCORE bs:ip_hits "$BAN_THRESHOLD" +inf 2>/dev/null | tr -d '\r')
 
     if [[ -z "$HIGH_HIT_IPS" ]]; then
         continue
