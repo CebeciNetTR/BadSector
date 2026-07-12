@@ -119,8 +119,8 @@ services:
       - ./data/certs/haproxy:/etc/haproxy/certs:ro
     ulimits:
       nofile:
-        soft: 200000
-        hard: 200000
+        soft: 300000
+        hard: 300000
     depends_on:
       engine:
         condition: service_healthy
