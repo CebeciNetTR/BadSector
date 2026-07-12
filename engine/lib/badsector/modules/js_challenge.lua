@@ -63,9 +63,9 @@ function M.run(ctx, config)
         if count == 1 then
             red:expire(fail_key, 60)
         end
-        if count and count > 5 then
-            red:setex("bs:ban:" .. ip, 7200, "1")
-            ngx.log(ngx.WARN, "badsector: IP " .. ip .. " banned for 2 hours due to JS challenge failure")
+        if count and count > 2 then
+            red:setex("bs:ban:" .. ip, 86400, "1")
+            ngx.log(ngx.WARN, "badsector: IP " .. ip .. " banned for 24 hours due to JS challenge failure")
         end
         redis.keepalive(red)
     end
