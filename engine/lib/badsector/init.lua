@@ -118,6 +118,10 @@ function _M.handle()
 
     config.sync_if_needed()
 
+    local client_ip = require("badsector.client_ip")
+    local rip = client_ip.from_request()
+    ngx.var.badsector_client_ip = rip or ""
+
     local uri = ngx.var.uri
 
     if uri == "/badsector/health" or uri == "/badsector/admin/reload" then
