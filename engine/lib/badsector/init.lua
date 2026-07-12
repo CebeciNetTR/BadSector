@@ -150,11 +150,7 @@ function _M.handle()
 
     if not site then
 
-        ngx.status = 404
-
-        ngx.say("Site not configured")
-
-        return ngx.exit(404)
+        return ngx.exit(444)
 
     end
 
