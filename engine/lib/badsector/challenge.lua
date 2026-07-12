@@ -91,7 +91,7 @@ function _M.js_challenge_page(cookie_name, ttl)
             height: 48px;
             border: 4px solid rgba(255, 255, 255, 0.1);
             border-left-color: #3b82f6;
-            border-radius: 50%;
+            border-radius: 50%%;
             animation: spin 1s linear infinite;
             margin: 0 auto 20px auto;
         }
