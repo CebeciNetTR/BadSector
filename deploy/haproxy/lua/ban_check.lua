@@ -24,7 +24,7 @@ local hit_counter = {}
 local function redis_get(host, port, key)
     local sock = core.tcp()
     sock:settimeout(100)
-    if not sock:connect(host, port) then return nil end
+    if not sock:connect(host .. ":" .. port) then return nil end
 
     local cmd = "*2\r\n$3\r\nGET\r\n$" .. #key .. "\r\n" .. key .. "\r\n"
     sock:send(cmd)
@@ -45,7 +45,7 @@ end
 local function redis_zincrby_batch(host, port, ip, amount)
     local sock = core.tcp()
     sock:settimeout(50)
-    if not sock:connect(host, port) then return end
+    if not sock:connect(host .. ":" .. port) then return end
 
     local key = "bs:ip_hits"
     local amt = tostring(amount)
