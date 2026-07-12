@@ -201,6 +201,14 @@ export const api = {
   renewCertificate: (certId: string) =>
     request<CertificateRecord>(`/certificates/${certId}/renew`, {
       method: 'POST',
-    }),  deleteCertificate: (certId: string) =>
+    }),
+  deleteCertificate: (certId: string) =>
     request<void>(`/certificates/${certId}`, { method: 'DELETE' }),
+
+  getAttackMode: () => request<{ enabled: boolean }>('/attack-mode'),
+  saveAttackMode: (enabled: boolean) =>
+    request<{ enabled: boolean }>('/attack-mode', {
+      method: 'PUT',
+      body: JSON.stringify({ enabled }),
+    }),
 }

@@ -74,3 +74,23 @@ func (s *Store) List(siteID string, limit int) ([]RequestTrace, error) {
 func (s *Store) Ping(ctx context.Context) error {
 	return s.client.Ping(ctx).Err()
 }
+
+func (s *Store) GetAttackMode() (bool, error) {
+	ctx := context.Background()
+	val, err := s.client.Get(ctx, "bs:attack_mode").Result()
+	if err == redis.Nil {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return val == "1", nil
+}
+
+func (s *Store) SetAttackMode(enabled bool) error {
+	ctx := context.Background()
+	if enabled {
+		return s.client.Set(ctx, "bs:attack_mode", "1", 0).Err()
+	}
+	return s.client.Del(ctx, "bs:attack_mode").Err()
+}

@@ -95,6 +95,9 @@ func (h *Handler) Register(g *echo.Group) {
 	g.POST("/certificates/:certId/renew", h.renewCertificate)
 	g.DELETE("/certificates/:certId", h.deleteCertificate)
 
+	g.GET("/attack-mode", h.getAttackMode)
+	g.PUT("/attack-mode", h.updateAttackMode)
+
 	g.GET("/sites/:id/traces", h.listTraces)
 
 	g.POST("/runtime/reload", h.reloadRuntime)
