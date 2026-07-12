@@ -111,6 +111,8 @@ services:
     restart: unless-stopped
     environment:
       HAPROXY_CONFIG: ${BADSECTOR_HAPROXY_CONFIG:-dev}
+      BADSECTOR_REDIS_HOST: redis
+      BADSECTOR_REDIS_PORT: "6379"
     ports:
       - "9080:9080"
       - "80:80"
