@@ -13,6 +13,8 @@ _M.CONTINUE = { action = "CONTINUE", terminal = false }
 -- Terminal decisions
 _M.ALLOW = { action = "ALLOW", terminal = true }
 _M.RETURN_444 = { action = "RETURN_444", terminal = true }
+_M.BLOCK = { action = "BLOCK", terminal = true }
+_M.CHALLENGE = { action = "CHALLENGE", terminal = true }
 
 --- Build a BLOCK decision with optional status, body, and headers.
 ---@param status number|nil HTTP status (default 403)
