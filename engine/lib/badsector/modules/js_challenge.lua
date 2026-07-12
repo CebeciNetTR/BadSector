@@ -53,6 +53,23 @@ function M.run(ctx, config)
         return decision.CONTINUE
     end
 
+    -- Redis auto-ban on repeated challenge requests
+    local redis = require("badsector.redis")
+    local red = redis.connect()
+    if red then
+        local ip = ctx.request.remote_addr
+        local fail_key = "bs:js_fail:" .. ip
+        local count, err = red:incr(fail_key)
+        if count == 1 then
+            red:expire(fail_key, 60)
+        end
+        if count and count > 5 then
+            red:setex("bs:ban:" .. ip, 7200, "1")
+            ngx.log(ngx.WARN, "badsector: IP " .. ip .. " banned for 2 hours due to JS challenge failure")
+        end
+        redis.keepalive(red)
+    end
+
     ctx:trace("js_challenge", decision.CHALLENGE, "JS challenge required")
     return decision.challenge("js", {
         cookie_name = cfg.cookie_name,

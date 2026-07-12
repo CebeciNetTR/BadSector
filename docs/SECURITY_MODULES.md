@@ -91,6 +91,9 @@ Serves HTML+JS page that sets a cookie, then reloads. Disabled by default.
 | `cookie_name` | Default `bs_js_ok` |
 | `cookie_ttl` | Max-Age seconds |
 
+> [!NOTE]
+> **Automated Redis Ban**: If a client triggers the JS challenge more than 5 times in a 1-minute window without solving it, their IP is automatically banned in Redis for 2 hours (7200 seconds). Subsequent requests will be closed instantly with HTTP `444`.
+
 ## Cookie Challenge (`cookie_challenge`)
 
 Sets HttpOnly verification cookie on first visit; subsequent requests pass.
@@ -99,6 +102,9 @@ Sets HttpOnly verification cookie on first visit; subsequent requests pass.
 |-------|-------------|
 | `cookie_name` | Default `bs_verified` |
 | `cookie_ttl` | Cookie Max-Age |
+
+> [!NOTE]
+> **Automated Redis Ban**: If a client triggers the Cookie challenge more than 5 times in a 1-minute window without the verified cookie, their IP is automatically banned in Redis for 2 hours (7200 seconds). Subsequent requests will be closed instantly with HTTP `444`.
 
 ## API
 

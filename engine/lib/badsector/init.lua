@@ -122,6 +122,19 @@ function _M.handle()
     local rip = client_ip.from_request()
     ngx.var.badsector_client_ip = rip or ""
 
+    -- Redis ban check
+    local redis = require("badsector.redis")
+    local red = redis.connect()
+    if red then
+        local ban_key = "bs:ban:" .. (rip or "")
+        local is_banned, err = red:get(ban_key)
+        if is_banned and is_banned ~= ngx.null then
+            redis.keepalive(red)
+            return ngx.exit(444)
+        end
+        redis.keepalive(red)
+    end
+
     local uri = ngx.var.uri
 
     if uri == "/badsector/health" or uri == "/badsector/admin/reload" then
