@@ -116,6 +116,8 @@ services:
     depends_on:
       engine:
         condition: service_healthy
+    sysctls:
+      - net.ipv4.tcp_tw_reuse=1
 
   backend:
     image: nginx:alpine
