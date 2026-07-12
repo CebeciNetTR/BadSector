@@ -132,6 +132,21 @@ services:
       - net.core.somaxconn=65535
       - net.ipv4.tcp_max_syn_backlog=65535
 
+  watcher:
+    build:
+      context: ./deploy/watcher
+    restart: unless-stopped
+    privileged: true
+    network_mode: host
+    environment:
+      BADSECTOR_REDIS_HOST: "127.0.0.1"
+      BADSECTOR_REDIS_PORT: "6379"
+      BAN_THRESHOLD: "1000"       # 1000 hit = iptables ban
+      CHECK_INTERVAL: "30"        # 30 saniyede bir kontrol
+      BAN_TTL: "86400"            # 24 saat ban
+    depends_on:
+      - redis
+
   backend:
     image: nginx:alpine
     ports:

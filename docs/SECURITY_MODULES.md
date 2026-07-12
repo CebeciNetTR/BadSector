@@ -92,7 +92,7 @@ Serves HTML+JS page that sets a cookie, then reloads. Disabled by default.
 | `cookie_ttl` | Max-Age seconds |
 
 > [!NOTE]
-> **Automated Redis Ban**: If a client triggers the JS challenge more than 5 times in a 1-minute window without solving it, their IP is automatically banned in Redis for 2 hours (7200 seconds). Subsequent requests will be closed instantly with HTTP `444`.
+> **Automated Redis Ban**: If a client triggers the JS challenge more than 2 times in a 1-minute window without solving it, their IP is automatically banned in Redis for 24 hours (86400 seconds). Subsequent requests will be closed instantly with HTTP `444`.
 
 ## Cookie Challenge (`cookie_challenge`)
 
@@ -104,7 +104,15 @@ Sets HttpOnly verification cookie on first visit; subsequent requests pass.
 | `cookie_ttl` | Cookie Max-Age |
 
 > [!NOTE]
-> **Automated Redis Ban**: If a client triggers the Cookie challenge more than 5 times in a 1-minute window without the verified cookie, their IP is automatically banned in Redis for 2 hours (7200 seconds). Subsequent requests will be closed instantly with HTTP `444`.
+> **Automated Redis Ban**: If a client triggers the Cookie challenge more than 2 times in a 1-minute window without the verified cookie, their IP is automatically banned in Redis for 24 hours (86400 seconds). Subsequent requests will be closed instantly with HTTP `444`.
+
+## HAProxy-level IP Watcher & Attack Mode
+
+To handle massive DDoS floods without exhausting OpenResty (engine) resources:
+
+1. **HAProxy Lua Ban Check**: When attack mode is enabled (`redis-cli set bs:attack_mode 1`), HAProxy checks Redis for `bs:ban:<ip>` on every request and silently drops banned IPs (`http-request silent-drop`) without passing them to the engine or wasting port resources.
+2. **IP Watcher Service**: A privileged daemon container that monitors HAProxy request hit counters in Redis (`bs:ip_hits`). If an IP exceeds `BAN_THRESHOLD` (default 1000 hits in 30s), the watcher automatically bans the IP for 24 hours in both the host firewall via `iptables` / `ipset` (zero CPU overhead) and Redis.
+3. **Daily Reset**: Every day at midnight (00:00), the watcher resets hit counters and flushes the host `ipset` blocklist.
 
 ## API
 
