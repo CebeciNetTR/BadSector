@@ -20,11 +20,44 @@ local attack_mode_cache = { value = false, expires = 0 }
 -- Thread-yerel hit sayaci (HAProxy thread'leri arasinda paylasilmaz)
 local hit_counter = {}
 
+-- Redis IP adresi cache (HAProxy hostnames desteklemedigi icin)
+local resolved_redis_ip = nil
+
+local function get_redis_ip(host)
+    if resolved_redis_ip then
+        return resolved_redis_ip
+    end
+    
+    -- Eger zaten IP adresi ise direkt don
+    if host:match("^%d+%.%d+%.%d+%.%d+$") then
+        resolved_redis_ip = host
+        return host
+    end
+    
+    -- Alan adini IP'ye coz
+    local addrs = core.getaddrinfo(host)
+    if addrs then
+        for _, addr in ipairs(addrs) do
+            if addr.ip and addr.ip:match("^%d+%.%d+%.%d+%.%d+$") then
+                resolved_redis_ip = addr.ip
+                return resolved_redis_ip
+            end
+        end
+    end
+    
+    return nil
+end
+
 -- Redis GET (RESP protokolü)
 local function redis_get(host, port, key)
+    local ip = get_redis_ip(host)
+    if not ip then
+        return nil
+    end
+
     local sock = core.tcp()
     sock:settimeout(100)
-    if not sock:connect(host .. ":" .. port) then return nil end
+    if not sock:connect(ip .. ":" .. port) then return nil end
 
     local cmd = "*2\r\n$3\r\nGET\r\n$" .. #key .. "\r\n" .. key .. "\r\n"
     sock:send(cmd)
@@ -43,9 +76,14 @@ end
 
 -- Redis ZINCRBY - sorted set hit sayaci (toplu yazma)
 local function redis_zincrby_batch(host, port, ip, amount)
+    local r_ip = get_redis_ip(host)
+    if not r_ip then
+        return
+    end
+
     local sock = core.tcp()
     sock:settimeout(50)
-    if not sock:connect(host .. ":" .. port) then return end
+    if not sock:connect(r_ip .. ":" .. port) then return end
 
     local key = "bs:ip_hits"
     local amt = tostring(amount)
