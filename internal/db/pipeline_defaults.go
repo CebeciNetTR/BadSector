@@ -50,6 +50,9 @@ func DefaultPipelineStages(siteID string) []PipelineStage {
 		"enabled":      true,
 		"mark_trusted": true,
 		"verify_ip":    true,
+		// Dogrulanmis bot'u tum korumalardan (WAF dahil) muaf tut ve dogrudan
+		// backend'e gecir. Hem guvenli (forward-confirmed rDNS) hem ucuz.
+		"bypass_pipeline": true,
 	})
 
 	ipRepConfig, _ := json.Marshal(map[string]interface{}{

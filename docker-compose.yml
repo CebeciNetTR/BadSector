@@ -95,6 +95,8 @@ services:
       BADSECTOR_RUNTIME: /etc/badsector/runtime
       BADSECTOR_ENGINE_ADMIN_TOKEN: "badsector-engine-token"
       BADSECTOR_TRACE_BUFFER_SIZE: "100"
+      # Trusted bot rDNS dogrulamasi icin DNS resolver (Docker embedded DNS).
+      BADSECTOR_DNS_RESOLVER: "127.0.0.11"
     volumes:
       - runtime_config:/etc/badsector/runtime:ro
       - ./data/geoip:/etc/badsector/geoip:ro
