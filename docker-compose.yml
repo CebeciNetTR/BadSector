@@ -139,6 +139,7 @@ services:
       - "443:443"
     volumes:
       - ./data/certs/haproxy:/etc/haproxy/certs:ro
+      - ./data/haproxy:/usr/local/etc/haproxy/maps
     ulimits:
       nofile:
         soft: 300000

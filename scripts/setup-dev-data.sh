@@ -7,7 +7,13 @@ mkdir -p "${ROOT}/data/geoip"
 mkdir -p "${ROOT}/data/certs/haproxy"
 mkdir -p "${ROOT}/data/certs/acme"
 mkdir -p "${ROOT}/data/certs/private"
+mkdir -p "${ROOT}/data/haproxy"
 mkdir -p "${ROOT}/runtime"
+
+if [[ ! -f "${ROOT}/data/haproxy/site-ratelimit.map" ]]; then
+  cp "${ROOT}/deploy/haproxy/maps/site-ratelimit.map" "${ROOT}/data/haproxy/site-ratelimit.map"
+  echo "Created data/haproxy/site-ratelimit.map (default template)"
+fi
 
 echo "Dev data directories ready:"
 echo "  ${ROOT}/data/geoip   (GeoLite2-Country.mmdb, GeoLite2-ASN.mmdb)"

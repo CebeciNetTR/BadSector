@@ -20,7 +20,7 @@ local attack_mode_cache = { value = false, expires = 0 }
 -- Thread-yerel hit sayaci (HAProxy thread'leri arasinda paylasilmaz)
 local hit_counter = {}
 
--- Redis GET (RESP protokol¸)
+-- Redis GET (RESP protokolù)
 -- NOT: HAProxy'nin Socket:connect() fonksiyonu hostname'i dogrudan kabul eder
 -- (bkz. HAProxy Lua API docs) - core.getaddrinfo() DIYE BIR FONKSIYON YOK,
 -- bu yuzden host'u burada elle IP'ye cevirmeye calismiyoruz.
@@ -95,8 +95,14 @@ core.register_action("ban_check", { "http-req" }, function(txn)
     -- Her zaman hit say (attack mode bagimsiz)
     track_hit(redis_host, redis_port, ip)
 
-    -- Attack mode kapali ise hizli cikis
-    if not is_attack_mode(redis_host, redis_port) then
+    -- Attack mode durumunu her istekte txn degiskenine yaz. HAProxy config bu
+    -- bayraga gore 429 istek-hizi limitini uygular (attack acikken edge limiti,
+    -- kapaliyken motorun ince rate_limiter modulu devrede).
+    local attack_on = is_attack_mode(redis_host, redis_port)
+    txn.set_var(txn, "txn.bs_attack_mode", attack_on)
+
+    -- Attack mode kapali ise ban kontrolune gerek yok
+    if not attack_on then
         return
     end
 

@@ -17,6 +17,27 @@ is_ip() {
     esac
 }
 
+# --- site-ratelimit map dosyasini tohumla ---
+# maps/ dizini bir docker volume ile golgelenmis ve bos olabilir. HAProxy config
+# bu dosyayi ("map_str_int(.../site-ratelimit.map)") baslangicta yukler; dosya yoksa
+# HAProxy hic ayaga kalkmaz. O yuzden eksikse varsayilan sablondan kopyaliyoruz.
+MAP_DIR="/usr/local/etc/haproxy/maps"
+MAP_FILE="${MAP_DIR}/site-ratelimit.map"
+DEFAULT_MAP="/usr/local/share/badsector/maps-default/site-ratelimit.map"
+if [ ! -f "$MAP_FILE" ]; then
+    mkdir -p "$MAP_DIR" 2>/dev/null || true
+    if [ -f "$DEFAULT_MAP" ]; then
+        cp "$DEFAULT_MAP" "$MAP_FILE" 2>/dev/null || true
+    else
+        : > "$MAP_FILE" 2>/dev/null || true
+    fi
+    if [ -f "$MAP_FILE" ]; then
+        echo "badsector entrypoint: seeded $MAP_FILE" >&2
+    else
+        echo "badsector entrypoint: WARNING could not seed $MAP_FILE (check data/haproxy perms)" >&2
+    fi
+fi
+
 if [ -n "$BADSECTOR_REDIS_HOST" ] && ! is_ip "$BADSECTOR_REDIS_HOST"; then
     resolved=""
     # Alpine busybox'ta nslookup applet'i varsayilan olarak bulunur.

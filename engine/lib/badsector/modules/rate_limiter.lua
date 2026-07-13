@@ -1,6 +1,7 @@
 local decision = require("badsector.decision")
 local ratelimit = require("badsector.ratelimit")
 local redis = require("badsector.redis")
+local attack_mode = require("badsector.attack_mode")
 
 local M = {
     name = "rate_limiter",
@@ -47,6 +48,15 @@ end
 
 function M.run(ctx, config)
     config = config or {}
+
+    -- Attack mode ACIKKEN motor rate-limit'i devre disi: limitleme edge'de
+    -- (HAProxy) yapilir, motor ve Redis yuk altina girmez. Kapaliyken bu ince
+    -- (path/method/profil bazli) limitler normal calisir.
+    if attack_mode.is_on() then
+        ctx:trace(M.name, decision.CONTINUE, "Attack mode ON — edge (HAProxy) rate-limit devrede, motor atlandi")
+        return decision.CONTINUE
+    end
+
     local rules = config.rules or {}
     local site_id = ctx.site and ctx.site.id or "default"
     local fail_mode = config.fail_mode or global_config.fail_mode or "open"

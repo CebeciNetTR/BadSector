@@ -1,0 +1,17 @@
+# BadSector - site bazli HTTP istek hizi (request-rate) esigi override haritasi
+#
+# Format:  <host>  <limit>
+#   <limit> pozitif tamsayi -> bu host icin 10 saniyelik pencerede istek esigi
+#                              (haritada olmayan hostlar icin varsayilan: 20)
+#   <limit> = -1            -> bu host HAProxy request-rate limitinden MUAF
+#                              (engine/site bazli rate-limit modulu devrede kalir)
+#
+# Ornekler:
+# yogunsite.com 500
+# bakimdaki-site.com -1
+#
+# NOT: Bu dosya restart olmadan canli guncellenebilir:
+#   bash scripts/haproxy-site-limit.sh set <host> <limit>
+#   bash scripts/haproxy-site-limit.sh unlimited <host>
+#   bash scripts/haproxy-site-limit.sh clear <host>
+#   bash scripts/haproxy-site-limit.sh list
