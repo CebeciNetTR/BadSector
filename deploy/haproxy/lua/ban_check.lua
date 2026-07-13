@@ -1,138 +1,202 @@
 --[[
   BadSector HAProxy Attack Mode - ban_check.lua
 
-  1. Her IP icin Redis sorted set (bs:ip_hits) uzerinde hit sayar.
-     Verimlilik icin her BATCH_SIZE istekte bir Redis'e yazar (per thread).
-  2. Attack mode (bs:attack_mode=1) aktifken:
-     - bs:ban:<ip> kontrolu yapar
-     - Banli IP'leri engine'e ulastirmadan silent-drop eder
+  MIMARI (onemli): HAProxy Lua'da socket I/O yalnizca "yield" edilebilen
+  baglamlarda yapilabilir. http-request action'i socket icin yield EDEMEZ
+  ("yield not allowed" hatasi). Bu yuzden TUM Redis I/O'su arka plan task'inda
+  (core.register_task) yapilir; istek basina action ise SADECE bellekteki
+  global'leri okur (socket yok -> yield yok, cok hizli, DDoS'a dayanikli).
 
-  Attack mode toggle:
-    Ac:   redis-cli set bs:attack_mode 1
-    Kapat: redis-cli del bs:attack_mode
+  Arka plan task'i periyodik olarak:
+    1. bs:attack_mode  -> _attack_mode (global bayrak)
+    2. biriken IP hit'leri -> ZINCRBY bs:ip_hits (watcher bu seti okur)
+    3. attack acikken   -> SCAN bs:ban:* -> _bans (bellekte ban tablosu)
+
+  Istek basina action:
+    - _hits[ip]++  (bellek)
+    - txn.bs_attack_mode = _attack_mode
+    - attack + banli ise txn.bs_banned = true
+
+  Attack mode toggle:  redis-cli set bs:attack_mode 1  |  redis-cli del bs:attack_mode
 ]]
 
-local BATCH_SIZE = 10  -- Her N istekte bir Redis'e yaz (per thread)
+local POLL_MS   = tonumber(os.getenv("BADSECTOR_BAN_POLL_MS")) or 2000
+local BAN_CAP   = tonumber(os.getenv("BADSECTOR_BAN_CAP")) or 200000
+local HITS_CAP  = tonumber(os.getenv("BADSECTOR_HITS_CAP")) or 200000
 
--- Attack mode durumu cache (5 saniyede bir yenilenir)
-local attack_mode_cache = { value = false, expires = 0 }
+-- Global durum (lua-load tek Lua state + kilit kullandigi icin thread'ler arasi guvenli)
+local _attack_mode = false
+local _hits = {}   -- ip -> biriken sayac (task flush eder)
+local _hits_n = 0  -- _hits'teki farkli ip sayisi (Redis erisilemezse OOM korumasi)
+local _bans = {}   -- ip -> true (task yeniler)
 
--- Thread-yerel hit sayaci (HAProxy thread'leri arasinda paylasilmaz)
-local hit_counter = {}
-
--- HAProxy'nin Lua socket'i runtime'da hostname cozemez (yalnizca IP). redis_host
--- bir IP degilse (entrypoint cozumlemesi basarisiz olduysa) Redis islemlerini
--- atlariz; boylece her istekte ALERT/hata olusmaz (fail-open). Uyariyi bir kez basar.
 local warned_bad_host = false
+
 local function is_ipv4(s)
     if type(s) ~= "string" then return false end
     return s:match("^%d+%.%d+%.%d+%.%d+$") ~= nil
 end
 
-local function redis_host_ok(host)
-    if is_ipv4(host) then
-        return true
+-- ---- RESP (Redis protokolu) yardimcilari -  ù YALNIZCA task baglaminda kullanilir ----
+
+local function send_cmd(sock, args)
+    local parts = { "*" .. #args .. "\r\n" }
+    for _, a in ipairs(args) do
+        a = tostring(a)
+        parts[#parts + 1] = "$" .. #a .. "\r\n" .. a .. "\r\n"
     end
-    if not warned_bad_host then
-        warned_bad_host = true
-        core.log(core.LOG_ERR, "badsector ban_check: BADSECTOR_REDIS_HOST '"
-            .. tostring(host) .. "' bir IP degil; runtime DNS yok, Redis atlaniyor (attack-mode devre disi)")
-    end
-    return false
+    return sock:send(table.concat(parts))
 end
 
--- Redis GET (RESP protokolu)
--- NOT: HAProxy Lua socket'i runtime'da DNS cozemez; host bir IP olmali. Hostname
--- cozumlemesi container acilirken docker-entrypoint.sh tarafindan yapilir ve
--- BADSECTOR_REDIS_HOST env'i IP olarak set edilir.
-local function redis_get(host, port, key)
-    if not redis_host_ok(host) then return nil end
-    local sock = core.tcp()
-    sock:settimeout(100)
-    if not sock:connect(host, port) then return nil end
-
-    local cmd = "*2\r\n$3\r\nGET\r\n$" .. #key .. "\r\n" .. key .. "\r\n"
-    sock:send(cmd)
-
+-- Tek bir RESP yanitini okur (+simple, -error, :int, $bulk, *array; ic ice)
+local function read_reply(sock)
     local line = sock:receive("*l")
-    if not line then sock:close(); return nil end
+    if not line or line == "" then
+        return nil, "no reply"
+    end
+    local p = line:sub(1, 1)
+    local rest = line:sub(2)
 
-    local len = tonumber(line:sub(2))
-    if not len or len < 0 then sock:close(); return nil end
-
-    local val = sock:receive(len + 2)
-    sock:close()
-    if val then return val:sub(1, -3) end
-    return nil
+    if p == "+" then
+        return rest
+    elseif p == "-" then
+        return nil, rest
+    elseif p == ":" then
+        return tonumber(rest)
+    elseif p == "$" then
+        local len = tonumber(rest)
+        if not len or len < 0 then
+            return nil
+        end
+        local data = sock:receive(len + 2)  -- veri + CRLF
+        if not data then
+            return nil
+        end
+        return data:sub(1, len)
+    elseif p == "*" then
+        local n = tonumber(rest)
+        if not n or n < 0 then
+            return nil
+        end
+        local arr = {}
+        for i = 1, n do
+            arr[i] = read_reply(sock)
+        end
+        return arr
+    end
+    return nil, "bad prefix"
 end
 
--- Redis ZINCRBY - sorted set hit sayaci (toplu yazma)
-local function redis_zincrby_batch(host, port, ip, amount)
-    if not redis_host_ok(host) then return end
-    local sock = core.tcp()
-    sock:settimeout(50)
-    if not sock:connect(host, port) then return end
-
-    local key = "bs:ip_hits"
-    local amt = tostring(amount)
-    -- ZINCRBY bs:ip_hits <amount> <ip>
-    local cmd = "*4\r\n$8\r\nZINCRBY\r\n$" .. #key .. "\r\n" .. key ..
-                "\r\n$" .. #amt .. "\r\n" .. amt ..
-                "\r\n$" .. #ip .. "\r\n" .. ip .. "\r\n"
-    sock:send(cmd)
-    sock:receive("*l")  -- yaniti oku (bloklamamak icin)
-    sock:close()
+local function redis_do(sock, args)
+    if not send_cmd(sock, args) then
+        return nil, "send failed"
+    end
+    return read_reply(sock)
 end
 
--- IP hit'ini sayar, BATCH_SIZE dolunca Redis'e yazar
-local function track_hit(host, port, ip)
-    local count = (hit_counter[ip] or 0) + 1
-    hit_counter[ip] = count
+-- ---- Task adimlari ----
 
-    if count >= BATCH_SIZE then
-        hit_counter[ip] = 0
-        redis_zincrby_batch(host, port, ip, BATCH_SIZE)
+local function poll_attack_mode(sock)
+    local v = redis_do(sock, { "GET", "bs:attack_mode" })
+    _attack_mode = (v == "1")
+end
+
+local function flush_hits(sock)
+    -- Anlik snapshot al ve sifirla (kilit altinda tek thread)
+    local snapshot = _hits
+    _hits = {}
+    _hits_n = 0
+    for ip, count in pairs(snapshot) do
+        if count > 0 then
+            redis_do(sock, { "ZINCRBY", "bs:ip_hits", count, ip })
+        end
     end
 end
 
--- Attack mode durumunu cache ile kontrol et
-local function is_attack_mode(host, port)
-    local now = os.time()
-    if now < attack_mode_cache.expires then
-        return attack_mode_cache.value
+local function refresh_bans(sock)
+    if not _attack_mode then
+        _bans = {}
+        return
     end
-    local val = redis_get(host, port, "bs:attack_mode")
-    attack_mode_cache.value = (val == "1")
-    attack_mode_cache.expires = now + 5
-    return attack_mode_cache.value
+    local new_bans = {}
+    local cursor = "0"
+    local total = 0
+    local iterations = 0
+    repeat
+        local reply = redis_do(sock, { "SCAN", cursor, "MATCH", "bs:ban:*", "COUNT", "500" })
+        if type(reply) ~= "table" then
+            break
+        end
+        cursor = reply[1]
+        local keys = reply[2]
+        if type(keys) == "table" then
+            for _, key in ipairs(keys) do
+                local ip = key:gsub("^bs:ban:", "")
+                new_bans[ip] = true
+                total = total + 1
+                if total >= BAN_CAP then
+                    cursor = "0"
+                    break
+                end
+            end
+        end
+        iterations = iterations + 1
+    until cursor == "0" or iterations > 5000
+    _bans = new_bans
 end
 
--- HAProxy http-req action
-core.register_action("ban_check", { "http-req" }, function(txn)
-    local redis_host = os.getenv("BADSECTOR_REDIS_HOST") or "redis"
-    local redis_port = tonumber(os.getenv("BADSECTOR_REDIS_PORT")) or 6379
+local function task_tick()
+    local host = os.getenv("BADSECTOR_REDIS_HOST") or "redis"
+    local port = tonumber(os.getenv("BADSECTOR_REDIS_PORT")) or 6379
 
-    local ip = txn.f:src()
-    if not ip or ip == "" then return end
-
-    -- Her zaman hit say (attack mode bagimsiz)
-    track_hit(redis_host, redis_port, ip)
-
-    -- Attack mode durumunu her istekte txn degiskenine yaz. HAProxy config bu
-    -- bayraga gore 429 istek-hizi limitini uygular (attack acikken edge limiti,
-    -- kapaliyken motorun ince rate_limiter modulu devrede).
-    local attack_on = is_attack_mode(redis_host, redis_port)
-    txn.set_var(txn, "txn.bs_attack_mode", attack_on)
-
-    -- Attack mode kapali ise ban kontrolune gerek yok
-    if not attack_on then
+    if not is_ipv4(host) then
+        if not warned_bad_host then
+            warned_bad_host = true
+            core.log(core.LOG_ERR, "badsector ban_check: BADSECTOR_REDIS_HOST '"
+                .. tostring(host) .. "' bir IP degil; Redis atlaniyor (attack-mode devre disi)")
+        end
         return
     end
 
-    -- Ban listesini kontrol et
-    local banned = redis_get(redis_host, redis_port, "bs:ban:" .. ip)
-    if banned then
-        core.log(core.LOG_WARNING, "badsector attack_mode: dropping banned IP " .. ip)
-        txn.set_var(txn, "txn.bs_banned", true)
+    local sock = core.tcp()
+    sock:settimeout(1000)
+    if not sock:connect(host, port) then
+        return
     end
+
+    poll_attack_mode(sock)
+    flush_hits(sock)
+    refresh_bans(sock)
+    sock:close()
+end
+
+-- Arka plan task'i: scheduler basladiginda calisir, sonsuz dongu + msleep.
+core.register_task(function()
+    while true do
+        local ok, err = pcall(task_tick)
+        if not ok then
+            core.log(core.LOG_WARNING, "badsector ban_check task error: " .. tostring(err))
+        end
+        core.msleep(POLL_MS)
+    end
+end)
+
+-- Istek basina action: SADECE bellek erisimi (socket yok, yield yok).
+core.register_action("ban_check", { "http-req" }, function(txn)
+    local ip = txn.f:src()
+    if ip and ip ~= "" then
+        local cur = _hits[ip]
+        if cur then
+            _hits[ip] = cur + 1
+        elseif _hits_n < HITS_CAP then
+            -- Yeni IP: yalnizca kapasite dahilindeyse ekle (Redis erisilemezse
+            -- flush olmaz; sinirsiz IP birikimini engelle).
+            _hits[ip] = 1
+            _hits_n = _hits_n + 1
+        end
+        if _attack_mode and _bans[ip] then
+            txn.set_var(txn, "txn.bs_banned", true)
+        end
+    end
+    txn.set_var(txn, "txn.bs_attack_mode", _attack_mode)
 end, 0)
