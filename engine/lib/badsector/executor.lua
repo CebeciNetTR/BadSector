@@ -8,6 +8,20 @@ local decision = require("badsector.decision")
 
 local _M = {}
 
+--- Sessiz drop (444 esdegeri, HAProxy uyumlu).
+--- HAProxy arkasindayken ngx.exit(444) baglantiyi yanitsiz kapatir; HAProxy bunu
+--- "server hangup" (SH) sayip istemciye 502 uretir (bkz. 502 SH-- loglari). Bunun
+--- yerine X-BadSector-Drop:1 header'li kucuk bir yanit doneriz; HAProxy bu header'i
+--- gorunce baglantiyi sessizce dusurur (http-response silent-drop) -> istemciye
+--- hicbir sey gitmez, HAProxy kaynak tutmaz. HAProxy yoksa (dogrudan erisim) istemci
+--- yalnizca bos govdeli 403 gorur.
+function _M.drop()
+    ngx.header["X-BadSector-Drop"] = "1"
+    ngx.status = 403
+    ngx.say("")
+    return ngx.exit(403)
+end
+
 --- Apply a terminal decision to the current request.
 ---@param ctx table RequestContext
 function _M.apply(ctx)
@@ -33,7 +47,7 @@ function _M.apply(ctx)
 
     elseif action == "RETURN_444" then
         ngx.header["X-BadSector-Action"] = "block"
-        return ngx.exit(444)
+        return _M.drop()
 
     elseif action == "REDIRECT" then
         return ngx.redirect(d.url, d.status or 302)

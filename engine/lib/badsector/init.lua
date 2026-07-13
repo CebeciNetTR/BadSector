@@ -130,7 +130,7 @@ function _M.handle()
         local is_banned, err = red:get(ban_key)
         if is_banned and is_banned ~= ngx.null then
             redis.keepalive(red)
-            return ngx.exit(444)
+            return executor.drop()
         end
         redis.keepalive(red)
     end
@@ -167,7 +167,7 @@ function _M.handle()
 
     if not site then
 
-        return ngx.exit(444)
+        return executor.drop()
 
     end
 
