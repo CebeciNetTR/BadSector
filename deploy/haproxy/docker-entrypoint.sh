@@ -17,6 +17,44 @@ is_ip() {
     esac
 }
 
+# Hostname -> IPv4 cozumleme. Alpine/busybox surumleri arasinda nslookup ciktisi
+# degistigi icin birden fazla yontemi sirayla dener; ilk gecerli IPv4'u dondurur.
+resolve_ipv4() {
+    _host="$1"
+    _ip=""
+
+    # 1) getent (varsa en guveniliri)
+    if command -v getent >/dev/null 2>&1; then
+        _ip=$(getent ahostsv4 "$_host" 2>/dev/null | awk '{print $1; exit}')
+        [ -z "$_ip" ] && _ip=$(getent hosts "$_host" 2>/dev/null | awk '{print $1; exit}')
+    fi
+
+    # 2) ping (busybox'ta hep var, cikti formati stabil: "PING host (IP): ...")
+    if [ -z "$_ip" ] && command -v ping >/dev/null 2>&1; then
+        _ip=$(ping -c 1 -w 1 "$_host" 2>/dev/null \
+            | sed -n 's/.*(\([0-9][0-9.]*\)).*/\1/p' | head -n 1)
+    fi
+
+    # 3) nslookup — cevap blogundaki ("Name:" sonrasi) ilk IPv4. Alanlari tarar,
+    #    boylece "Address: IP", "Address 1: IP" ve "Address 1: IP hostname" ile
+    #    sondaki ":53" bicimlerinin hepsini tolere eder.
+    if [ -z "$_ip" ] && command -v nslookup >/dev/null 2>&1; then
+        _ip=$(nslookup "$_host" 2>/dev/null | awk '
+            /^Name:/ { ans=1; next }
+            ans && /Address/ {
+                for (i = 1; i <= NF; i++) {
+                    f = $i; sub(/:.*/, "", f);
+                    if (f ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/) { print f; exit }
+                }
+            }')
+    fi
+
+    case "$_ip" in
+        [0-9]*.[0-9]*.[0-9]*.[0-9]*) echo "$_ip" ;;
+        *) echo "" ;;
+    esac
+}
+
 # --- site-ratelimit map dosyasini tohumla ---
 # maps/ dizini bir docker volume ile golgelenmis ve bos olabilir. HAProxy config
 # bu dosyayi ("map_str_int(.../site-ratelimit.map)") baslangicta yukler; dosya yoksa
@@ -39,13 +77,8 @@ if [ ! -f "$MAP_FILE" ]; then
 fi
 
 if [ -n "$BADSECTOR_REDIS_HOST" ] && ! is_ip "$BADSECTOR_REDIS_HOST"; then
-    resolved=""
-    # Alpine busybox'ta nslookup applet'i varsayilan olarak bulunur.
-    if command -v nslookup >/dev/null 2>&1; then
-        resolved=$(nslookup "$BADSECTOR_REDIS_HOST" 2>/dev/null \
-            | awk '/^Name:/{f=1; next} f && /^Address/{print $3; exit}')
-    fi
-    # Yedek yol: /etc/hosts icinde docker tarafindan zaten eklenmis olabilir.
+    resolved=$(resolve_ipv4 "$BADSECTOR_REDIS_HOST")
+    # Yedek yol: /etc/hosts
     if [ -z "$resolved" ] && [ -f /etc/hosts ]; then
         resolved=$(awk -v h="$BADSECTOR_REDIS_HOST" '$2==h{print $1; exit}' /etc/hosts)
     fi
@@ -54,7 +87,7 @@ if [ -n "$BADSECTOR_REDIS_HOST" ] && ! is_ip "$BADSECTOR_REDIS_HOST"; then
         echo "badsector entrypoint: resolved $BADSECTOR_REDIS_HOST -> $resolved" >&2
         export BADSECTOR_REDIS_HOST="$resolved"
     else
-        echo "badsector entrypoint: WARNING could not resolve $BADSECTOR_REDIS_HOST, leaving as-is" >&2
+        echo "badsector entrypoint: WARNING could not resolve $BADSECTOR_REDIS_HOST, leaving as-is (attack-mode edge checks will be skipped)" >&2
     fi
 fi
 

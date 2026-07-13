@@ -20,11 +20,33 @@ local attack_mode_cache = { value = false, expires = 0 }
 -- Thread-yerel hit sayaci (HAProxy thread'leri arasinda paylasilmaz)
 local hit_counter = {}
 
--- Redis GET (RESP protokolù)
--- NOT: HAProxy'nin Socket:connect() fonksiyonu hostname'i dogrudan kabul eder
--- (bkz. HAProxy Lua API docs) - core.getaddrinfo() DIYE BIR FONKSIYON YOK,
--- bu yuzden host'u burada elle IP'ye cevirmeye calismiyoruz.
+-- HAProxy'nin Lua socket'i runtime'da hostname cozemez (yalnizca IP). redis_host
+-- bir IP degilse (entrypoint cozumlemesi basarisiz olduysa) Redis islemlerini
+-- atlariz; boylece her istekte ALERT/hata olusmaz (fail-open). Uyariyi bir kez basar.
+local warned_bad_host = false
+local function is_ipv4(s)
+    if type(s) ~= "string" then return false end
+    return s:match("^%d+%.%d+%.%d+%.%d+$") ~= nil
+end
+
+local function redis_host_ok(host)
+    if is_ipv4(host) then
+        return true
+    end
+    if not warned_bad_host then
+        warned_bad_host = true
+        core.log(core.LOG_ERR, "badsector ban_check: BADSECTOR_REDIS_HOST '"
+            .. tostring(host) .. "' bir IP degil; runtime DNS yok, Redis atlaniyor (attack-mode devre disi)")
+    end
+    return false
+end
+
+-- Redis GET (RESP protokolu)
+-- NOT: HAProxy Lua socket'i runtime'da DNS cozemez; host bir IP olmali. Hostname
+-- cozumlemesi container acilirken docker-entrypoint.sh tarafindan yapilir ve
+-- BADSECTOR_REDIS_HOST env'i IP olarak set edilir.
 local function redis_get(host, port, key)
+    if not redis_host_ok(host) then return nil end
     local sock = core.tcp()
     sock:settimeout(100)
     if not sock:connect(host, port) then return nil end
@@ -46,6 +68,7 @@ end
 
 -- Redis ZINCRBY - sorted set hit sayaci (toplu yazma)
 local function redis_zincrby_batch(host, port, ip, amount)
+    if not redis_host_ok(host) then return end
     local sock = core.tcp()
     sock:settimeout(50)
     if not sock:connect(host, port) then return end
