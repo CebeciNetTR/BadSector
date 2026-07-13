@@ -36,4 +36,13 @@ function _M.record(site_id, ctx)
     end
 end
 
+--- Pipeline'a girmeden erken cikan drop'lari say (banli IP, bilinmeyen site vb.).
+--- Bu istekler ctx/pipeline uretmedigi icin record() cagrilmaz; dashboard'un
+--- gercek engellemeyi gormesi icin dogrudan sayaci artiririz.
+---@param action string  Karar etiketi (orn. "BAN_DROP", "NO_SITE")
+function _M.incr(action)
+    incr_hash(GLOBAL_KEY, "requests", 1)
+    incr_hash(DECISIONS_KEY, action or "DROP", 1)
+end
+
 return _M

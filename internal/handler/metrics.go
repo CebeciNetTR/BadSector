@@ -14,6 +14,8 @@ func (h *Handler) dashboardMetrics(c echo.Context) error {
 			"challenged":     0,
 			"rate_limited":   0,
 			"allowed":        0,
+			"banned_ips":     0,
+			"watched_ips":    0,
 			"active_sites":   0,
 			"decisions":      map[string]int{},
 			"edge": map[string]string{

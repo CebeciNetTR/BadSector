@@ -20,6 +20,8 @@ type Dashboard struct {
 	Challenged    int            `json:"challenged"`
 	RateLimited   int            `json:"rate_limited"`
 	Allowed       int            `json:"allowed"`
+	BannedIPs     int            `json:"banned_ips"`
+	WatchedIPs    int            `json:"watched_ips"`
 	ActiveSites   int64          `json:"active_sites"`
 	Decisions     map[string]int `json:"decisions"`
 	Edge          EdgeStatus     `json:"edge"`
@@ -83,7 +85,36 @@ func (s *Store) Dashboard(ctx context.Context, database *gorm.DB) (Dashboard, er
 		}
 	}
 
+	// Ban altyapisi metriklerden ayri bir alt sistem (watcher + HAProxy edge). Dashboard'un
+	// saldiri boyutunu gostermesi icin aktif ban sayisini (bs:ban:*) ve izlenen IP sayisini
+	// (bs:ip_hits) dogrudan buradan okuruz.
+	out.BannedIPs = scanCount(ctx, s.client, "bs:ban:*")
+	if n, zerr := s.client.ZCard(ctx, "bs:ip_hits").Result(); zerr == nil {
+		out.WatchedIPs = int(n)
+	}
+
 	return out, nil
+}
+
+// scanCount, verilen desene uyan anahtar sayisini SCAN ile sayar (KEYS yerine, prod-guvenli).
+// Cok buyuk keyspace'lerde Redis'i mesgul etmemek icin ust sinirla korunur.
+func scanCount(ctx context.Context, client *redis.Client, match string) int {
+	const maxKeys = 100000
+	const maxIter = 10000
+	var cursor uint64
+	count := 0
+	for i := 0; i < maxIter; i++ {
+		batch, next, err := client.Scan(ctx, cursor, match, 500).Result()
+		if err != nil {
+			break
+		}
+		count += len(batch)
+		cursor = next
+		if cursor == 0 || count >= maxKeys {
+			break
+		}
+	}
+	return count
 }
 
 func hashInt(ctx context.Context, client *redis.Client, key, field string) int {

@@ -130,6 +130,7 @@ function _M.handle()
         local is_banned, err = red:get(ban_key)
         if is_banned and is_banned ~= ngx.null then
             redis.keepalive(red)
+            require("badsector.metrics").incr("BAN_DROP")
             return executor.drop()
         end
         redis.keepalive(red)
@@ -166,6 +167,8 @@ function _M.handle()
 
 
     if not site then
+
+        require("badsector.metrics").incr("NO_SITE")
 
         return executor.drop()
 

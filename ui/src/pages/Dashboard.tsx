@@ -29,6 +29,8 @@ export default function Dashboard() {
         <StatCard label="Challenge" value={fmt(metrics?.challenged)} tone="warn" />
         <StatCard label="Rate Limit" value={fmt(metrics?.rate_limited)} tone="warn" />
         <StatCard label="İzin Verilen" value={fmt(metrics?.allowed)} tone="pass" />
+        <StatCard label="Banlı IP" value={fmt(metrics?.banned_ips)} tone="fail" />
+        <StatCard label="İzlenen IP" value={fmt(metrics?.watched_ips)} tone="warn" />
         <StatCard label="Aktif Site" value={fmt(metrics?.active_sites)} />
       </div>
 
