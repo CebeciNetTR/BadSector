@@ -54,6 +54,7 @@ services:
       BADSECTOR_ENGINE_RELOAD_URL: "http://engine:8080/badsector/admin/reload"
       BADSECTOR_ENGINE_ADMIN_TOKEN: "badsector-engine-token"
       BADSECTOR_GEOIP_PATH: /data/geoip
+      BADSECTOR_BOTS_PATH: /data/bots
       BADSECTOR_CERTS_PATH: /data/certs
       BADSECTOR_ACME_EMAIL: ${BADSECTOR_ACME_EMAIL:-}
       BADSECTOR_ACME_STAGING: ${BADSECTOR_ACME_STAGING:-false}
@@ -63,6 +64,7 @@ services:
       - runtime_config:/runtime
       - api_data:/data
       - ./data/geoip:/data/geoip:ro
+      - ./data/bots:/data/bots:ro
       - ./data/certs:/data/certs
     depends_on:
       postgres:
@@ -97,9 +99,18 @@ services:
       BADSECTOR_TRACE_BUFFER_SIZE: "100"
       # Trusted bot rDNS dogrulamasi icin DNS resolver (Docker embedded DNS).
       BADSECTOR_DNS_RESOLVER: "127.0.0.11"
+      # Worker'in yazdigi resmi bot IP aralik dosyasi (Googlebot/Bingbot).
+      BADSECTOR_BOTS_PATH: /etc/badsector/bots
+      # Imzali PoW challenge HMAC anahtari — URETIMDE MUTLAKA DEGISTIRIN.
+      # Tum engine worker'lari ayni sirri paylasmali (token'lar stateless dogrulanir).
+      BADSECTOR_CHALLENGE_SECRET: ${BADSECTOR_CHALLENGE_SECRET:-badsector-dev-challenge-secret-change-me}
+      # PoW zorlugu (basta hex sifir): normal / attack mode.
+      BADSECTOR_POW_DIFFICULTY: "4"
+      BADSECTOR_POW_DIFFICULTY_ATTACK: "5"
     volumes:
       - runtime_config:/etc/badsector/runtime:ro
       - ./data/geoip:/etc/badsector/geoip:ro
+      - ./data/bots:/etc/badsector/bots:ro
       - ./engine/coraza/rules:/etc/badsector/coraza/rules:ro
     ulimits:
       nofile:
@@ -210,6 +221,8 @@ services:
       BADSECTOR_ENGINE_ADMIN_TOKEN: "badsector-engine-token"
       BADSECTOR_GEOIP_PATH: /data/geoip
       BADSECTOR_GEOIP_SYNC_INTERVAL: "24h"
+      BADSECTOR_BOTS_PATH: /data/bots
+      BADSECTOR_BOT_SYNC_INTERVAL: "24h"
       MAXMIND_LICENSE_KEY: ${MAXMIND_LICENSE_KEY:-}
       BADSECTOR_CERTS_PATH: /data/certs
       BADSECTOR_ACME_EMAIL: ${BADSECTOR_ACME_EMAIL:-}
@@ -218,6 +231,7 @@ services:
     volumes:
       - runtime_config:/runtime
       - ./data/geoip:/data/geoip
+      - ./data/bots:/data/bots
       - ./data/certs:/data/certs
     depends_on:
       postgres:

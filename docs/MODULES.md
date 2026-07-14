@@ -7,7 +7,7 @@ Implementation status as of latest development:
 | Module | Status |
 |--------|--------|
 | access_lists | Implemented |
-| trusted_bots | Implemented |
+| trusted_bots | Implemented — statik prefix + rDNS + worker CIDR auto-sync |
 | ip_reputation | Implemented |
 | geoip | Implemented — MaxMind MMDB + worker sync |
 | asn | Implemented — GeoLite2-ASN MMDB + ip_map |
@@ -42,6 +42,38 @@ Implementation status as of latest development:
 | `cache` | request | Response caching |
 | `managed_waf` | request | Coraza WAF integration |
 | `reverse_proxy` | request | Upstream proxy (terminal: forwards) |
+
+## Trusted Bots — doğrulama ve IP aralığı otomatik güncelleme
+
+`trusted_bots` modülü, doğrulanmış arama motoru botlarını (Googlebot, Bingbot,
+YandexBot, DuckDuckBot) tüm pipeline'dan (WAF, rate-limit, challenge dahil) muaf
+tutar. Sahte UA'lı istekler muaf **değildir** — doğrulama katmanlıdır:
+
+1. **UA eşleşmesi yoksa** → bot değil, normal pipeline (DNS'e gidilmez).
+2. **IP resmi aralıktaysa** → doğru (DNS yok, hızlı yol).
+3. **Aksi halde** → forward-confirmed rDNS (PTR → hostname suffix → A kaydı teyidi).
+
+### Resmi IP aralıklarının günlük senkronizasyonu
+
+Statik prefix'ler bayatlar. `badsector-worker`, GeoIP ile aynı desende resmi
+yayınlanan aralıkları günlük indirir (`internal/bots`):
+
+- Googlebot: `googlebot.json`, `special-crawlers.json`, `user-triggered-fetchers.json`
+- Bingbot: `bingbot.json`
+
+Sonuç `data/bots/bot-ranges.json` dosyasına yazılır; engine bunu ~60 sn'de bir
+yeniden yükleyip **CIDR** eşleştirmesi yapar (IPv4 kesin, IPv6 4-bit/nibble
+granülariteli). Bu dinamik liste hızlı yolda olduğu için **saldırı modunda da
+DNS'siz** kullanılır — böylece saldırı sırasında meşru botlar yanlışlıkla
+banlanmaz. YandexBot ve DuckDuckBot resmi makine-okunabilir liste yayınlamadığı
+için statik prefix + rDNS ile doğrulanmaya devam eder.
+
+| Öğe | Değer |
+|-----|-------|
+| Worker env | `BADSECTOR_BOTS_PATH` (vol), `BADSECTOR_BOT_SYNC_INTERVAL` (24h) |
+| Engine env | `BADSECTOR_BOTS_PATH` (ro mount), `BADSECTOR_BOTS_RELOAD_SEC` (60) |
+| Durum ucu | `GET /api/v1/bots/status` (son güncelleme + bot başına aralık sayısı) |
+| Manuel tohumlama | `scripts/download-bots.sh` (jq gerekir) |
 
 ## Creating a Module
 

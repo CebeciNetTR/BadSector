@@ -48,11 +48,17 @@ func DefaultBurstDetectionConfig() map[string]interface{} {
 
 func DefaultJsChallengeConfig() map[string]interface{} {
 	return map[string]interface{}{
-		"enabled":        false,
-		"paths":          []interface{}{"/*"},
-		"exclude_paths":  []interface{}{"/badsector/*"},
-		"cookie_name":    "bs_js_ok",
-		"cookie_ttl":     3600,
+		"enabled":       false,
+		"paths":         []interface{}{"/*"},
+		"exclude_paths": []interface{}{"/badsector/*"},
+		// Imzali Proof-of-Work parametreleri (stateless HMAC).
+		"pass_cookie":       "bs_pass",
+		"pow_cookie":        "bs_pow",
+		"difficulty":        4, // normal (basta hex sifir sayisi ~ 2^16 hash)
+		"difficulty_attack": 5, // attack mode'da otomatik yukselir (~2^20 hash)
+		"pass_ttl":          3600,
+		"ban_threshold":     3,
+		"ban_ttl":           86400,
 	}
 }
 

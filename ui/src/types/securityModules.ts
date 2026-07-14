@@ -58,8 +58,14 @@ export interface JsChallengeConfig {
   enabled?: boolean
   paths: string[]
   exclude_paths: string[]
-  cookie_name: string
-  cookie_ttl: number
+  // Imzali Proof-of-Work (stateless HMAC)
+  difficulty: number
+  difficulty_attack: number
+  pass_ttl: number
+  pass_cookie?: string
+  pow_cookie?: string
+  ban_threshold?: number
+  ban_ttl?: number
 }
 
 export interface CookieChallengeConfig {
@@ -167,8 +173,13 @@ export function defaultJsChallengeConfig(): JsChallengeConfig {
   return {
     paths: ['/*'],
     exclude_paths: ['/badsector/*'],
-    cookie_name: 'bs_js_ok',
-    cookie_ttl: 3600,
+    difficulty: 4,
+    difficulty_attack: 5,
+    pass_ttl: 3600,
+    pass_cookie: 'bs_pass',
+    pow_cookie: 'bs_pow',
+    ban_threshold: 3,
+    ban_ttl: 86400,
   }
 }
 

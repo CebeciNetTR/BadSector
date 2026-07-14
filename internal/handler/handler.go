@@ -70,6 +70,7 @@ func (h *Handler) Register(g *echo.Group) {
 	g.PUT("/sites/:id/managed-waf", h.updateManagedWaf)
 
 	g.GET("/geoip/status", h.geoipStatus)
+	g.GET("/bots/status", h.botsStatus)
 
 	g.GET("/sites/:id/asn", h.getAsn)
 	g.PUT("/sites/:id/asn", h.updateAsn)

@@ -80,19 +80,55 @@ Short-window spike detection using Redis (same INCR+EXPIRE as rate limiter).
 | `action` | `rate_limit` | `rate_limit` (429) or `block` |
 | `fail_open` | true | Continue if Redis down |
 
-## JS Challenge (`js_challenge`)
+## JS Challenge — imzalı Proof-of-Work (`js_challenge`)
 
-Serves HTML+JS page that sets a cookie, then reloads. Disabled by default.
+Varsayılan kapalı. Artık **kriptografik imzalı Proof-of-Work** kullanır (eski
+"cookie=1 set et" mantığı taklit edilebilirdi). Tamamen **stateless**'tır —
+Redis/DB'de challenge state tutulmaz; doğrulama yalnızca HMAC + zaman + PoW
+teyididir.
 
-| Field | Description |
-|-------|-------------|
-| `paths` | Apply challenge to these paths |
-| `exclude_paths` | Skip (default `/badsector/*`) |
-| `cookie_name` | Default `bs_js_ok` |
-| `cookie_ttl` | Max-Age seconds |
+**Akış:**
+1. Cookie yoksa → tarayıcıya imzalı challenge token'lı bir sayfa döner. Tarayıcı
+   senkron SHA-256 ile `sha256(token:nonce)` başında `difficulty` adet hex sıfır
+   olacak bir `nonce` bulur (PoW maliyetini **istemci** öder).
+2. Çözümü `bs_pow` cookie'sine yazıp yeniler. Sunucu **1 hash** ile doğrular,
+   imzalı `bs_pass` gecis cookie'si verir (302).
+3. Sonraki istekler `bs_pass` ile **1 HMAC** (~µs) doğrulanır → hızlı yol.
+
+**Token'lar (stateless HMAC-SHA256):**
+- Challenge: `ts.d.salt.sig`, `sig = HMAC(secret, "chal|"+ip+"|ts.d.salt")` — `difficulty` imzalı olduğundan istemci düşüremez.
+- Pass: `exp.sig`, `sig = HMAC(secret, "pass|"+ip+"|ua_fp|exp")` — IP + UA'ya bağlı.
+
+| Field | Default | Description |
+|-------|---------|-------------|
+| `paths` / `exclude_paths` | `/*` / `/badsector/*` | Uygulama kapsamı |
+| `difficulty` | 4 | Normal zorluk (başta hex sıfır ≈ 2^16 hash) |
+| `difficulty_attack` | 5 | Attack mode'da otomatik yükselen zorluk (≈ 2^20) |
+| `pass_ttl` | 3600 | `bs_pass` geçerlilik (s) |
+| `pass_cookie` / `pow_cookie` | `bs_pass` / `bs_pow` | Cookie adları |
+| `ban_threshold` / `ban_ttl` | 3 / 86400 | Çözümsüz challenge banı |
+
+**Env (engine):** `BADSECTOR_CHALLENGE_SECRET` (üretimde mutlaka değiştirin; tüm
+worker'lar aynı sırrı paylaşmalı), `BADSECTOR_POW_DIFFICULTY[_ATTACK]`,
+`BADSECTOR_POW_PASS_TTL`, `BADSECTOR_POW_CHAL_TTL`.
+
+**Edge fast-path:** `bs_pass` taşıyan istekler HAProxy'de attack-mode 429'undan
+muaf (presence kontrolü); gerçek kriptografik doğrulama motorda yapılır, sahte
+cookie kötüye kullanımı auto-ban ile IP başına sınırlıdır.
+
+**Difficulty maliyeti (attack mode):** PoW'u istemci çözer; sunucu tarafı maliyet
+challenge başına ~1 HMAC + 1 hash (~µs). Asıl maliyet TLS handshake + sayfa
+egress'idir ve auto-ban sayesinde IP başına birkaç istekle sınırlıdır.
 
 > [!NOTE]
-> **Automated Redis Ban**: If a client triggers the JS challenge more than 2 times in a 1-minute window without solving it, their IP is automatically banned in Redis for 24 hours (86400 seconds). Subsequent requests will be closed instantly with HTTP `444`.
+> **Otomatik ban**: Bir istemci 60 sn içinde `ban_threshold` (varsayılan 3) kez
+> challenge alıp çözemezse IP'si 24 saat banlanır; sonraki istekler edge'de
+> sessizce düşürülür (silent-drop).
+
+> [!IMPORTANT]
+> PoW gerçek bir tarayıcı (JavaScript + SHA-256) gerektirir. JS çalıştırmayan
+> istemciler (bazı botlar, JS'siz tarayıcılar) çözemez ve auto-ban'a takılır —
+> meşru botlar için `trusted_bots` muafiyetine güvenin.
 
 ## Cookie Challenge (`cookie_challenge`)
 

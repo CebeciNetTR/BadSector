@@ -6,6 +6,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/badsector/badsector/internal/bots"
 	"github.com/badsector/badsector/internal/certs"
 	"github.com/badsector/badsector/internal/config"
 	"github.com/badsector/badsector/internal/db"
@@ -23,6 +24,7 @@ func main() {
 	generator := runtime.NewGenerator(cfg.RuntimePath)
 	reloader := runtime.NewEngineReloader(cfg.EngineReloadURL, cfg.EngineAdminToken)
 	geoSyncer := geoip.NewSyncer(cfg.MaxMindLicenseKey, cfg.GeoIPDataPath)
+	botSyncer := bots.NewSyncer(cfg.BotsDataPath)
 
 	certManager, err := certs.NewManager(
 		database,
@@ -41,15 +43,22 @@ func main() {
 		syncInterval = 24 * time.Hour
 	}
 
+	botSyncInterval, err := time.ParseDuration(cfg.BotSyncInterval)
+	if err != nil {
+		botSyncInterval = 24 * time.Hour
+	}
+
 	certRenewInterval, err := time.ParseDuration(cfg.CertRenewInterval)
 	if err != nil {
 		certRenewInterval = 6 * time.Hour
 	}
 
-	log.Printf("badsector-worker started (geoip=%s certs=%s)", cfg.GeoIPDataPath, cfg.CertsPath)
+	log.Printf("badsector-worker started (geoip=%s bots=%s certs=%s)", cfg.GeoIPDataPath, cfg.BotsDataPath, cfg.CertsPath)
 
 	runGeoSync(geoSyncer, reloader)
+	runBotSync(botSyncer, reloader)
 	lastGeoSync := time.Now()
+	lastBotSync := time.Now()
 	lastCertRenew := time.Now()
 
 	ticker := time.NewTicker(30 * time.Second)
@@ -63,6 +72,11 @@ func main() {
 		if time.Since(lastGeoSync) >= syncInterval {
 			runGeoSync(geoSyncer, reloader)
 			lastGeoSync = time.Now()
+		}
+
+		if time.Since(lastBotSync) >= botSyncInterval {
+			runBotSync(botSyncer, reloader)
+			lastBotSync = time.Now()
 		}
 
 		if time.Since(lastCertRenew) >= certRenewInterval {
@@ -115,6 +129,25 @@ func runGeoSync(syncer *geoip.Syncer, reloader *runtime.EngineReloader) {
 	if reloader != nil {
 		if err := reloader.Reload(); err != nil {
 			log.Printf("geoip sync engine reload: %v", err)
+		}
+	}
+}
+
+func runBotSync(syncer *bots.Syncer, reloader *runtime.EngineReloader) {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+
+	if err := syncer.Sync(ctx); err != nil {
+		log.Printf("bot ranges sync: %v", err)
+		// Kismi basari olabilir (bazi kaynaklar guncellendi); yine de reload et.
+	}
+
+	st := syncer.Status()
+	log.Printf("bot ranges sync ok: generated=%s counts=%v", st.Generated, st.Counts)
+
+	if reloader != nil {
+		if err := reloader.Reload(); err != nil {
+			log.Printf("bot ranges sync engine reload: %v", err)
 		}
 	}
 }

@@ -37,7 +37,7 @@ local function is_ipv4(s)
     return s:match("^%d+%.%d+%.%d+%.%d+$") ~= nil
 end
 
--- ---- RESP (Redis protokolu) yardimcilari -  ù YALNIZCA task baglaminda kullanilir ----
+-- ---- RESP (Redis protokolu) yardimcilari -  ÔøΩ YALNIZCA task baglaminda kullanilir ----
 
 local function send_cmd(sock, args)
     local parts = { "*" .. #args .. "\r\n" }

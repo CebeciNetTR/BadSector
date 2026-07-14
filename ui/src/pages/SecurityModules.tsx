@@ -391,14 +391,26 @@ export default function SecurityModules() {
           {tab === 'challenges' && (
             <>
               <div className="card form-grid">
-                <h3>JS Challenge</h3>
+                <h3>JS Challenge (imzalı Proof-of-Work)</h3>
+                <p style={{ color: 'var(--muted)', fontSize: '0.85rem', margin: 0 }}>
+                  Stateless HMAC + JS PoW. Zorluk attack mode'da otomatik yükselir.
+                  Çözen istemciye imzalı <code>bs_pass</code> geçiş cookie'si verilir.
+                </p>
                 <label className="checkbox-row">
                   <input type="checkbox" checked={jsEnabled} onChange={(e) => { setJsEnabled(e.target.checked); markDirty() }} />
                   Etkin
                 </label>
                 <label>
-                  Cookie adı
-                  <input value={js.cookie_name} onChange={(e) => { setJs({ ...js, cookie_name: e.target.value }); markDirty() }} />
+                  Zorluk (normal) — baştaki hex sıfır sayısı
+                  <input type="number" min={1} max={8} value={js.difficulty} onChange={(e) => { setJs({ ...js, difficulty: Number(e.target.value) }); markDirty() }} />
+                </label>
+                <label>
+                  Zorluk (attack mode)
+                  <input type="number" min={1} max={10} value={js.difficulty_attack} onChange={(e) => { setJs({ ...js, difficulty_attack: Number(e.target.value) }); markDirty() }} />
+                </label>
+                <label>
+                  Pass süresi (sn)
+                  <input type="number" value={js.pass_ttl} onChange={(e) => { setJs({ ...js, pass_ttl: Number(e.target.value) }); markDirty() }} />
                 </label>
                 <label>
                   Path patterns
