@@ -1,6 +1,9 @@
 services:
   redis:
     image: redis:7-alpine
+    # 8GB kutuda Redis'in sinirsiz buyumesini engelle. Veriler (rate sayaclari,
+    # ban listesi, PoW token, trace) TTL'li oldugu icin allkeys-lru guvenli.
+    command: ["redis-server", "--maxmemory", "512mb", "--maxmemory-policy", "allkeys-lru", "--save", "", "--appendonly", "no"]
     ports:
       - "6379:6379"
     volumes:
@@ -22,6 +25,19 @@ services:
       POSTGRES_USER: badsector
       POSTGRES_PASSWORD: badsector
       POSTGRES_DB: badsector
+    # 8GB kutu icin olculu ayar (config-agirlikli, dusuk yazma trafigi).
+    command:
+      - postgres
+      - -c
+      - shared_buffers=192MB
+      - -c
+      - effective_cache_size=768MB
+      - -c
+      - work_mem=8MB
+      - -c
+      - maintenance_work_mem=64MB
+      - -c
+      - max_connections=50
     ports:
       - "5432:5432"
     volumes:
