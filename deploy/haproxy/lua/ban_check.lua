@@ -106,11 +106,42 @@ local function flush_hits(sock)
     local snapshot = _hits
     _hits = {}
     _hits_n = 0
+
+    -- Pipeline: tek tek round-trip yerine komutlari batch halinde gonder, sonra
+    -- yanitlari topluca oku. 80k+ IP'de N round-trip'i N/BATCH'e dusurur; flood
+    -- altinda Redis'i ve Lua task'ini bogmaz (incident kok nedeni).
+    local BATCH = 1000
+    local buf = {}
+    local pending = 0
+
+    local function flush_batch()
+        if pending == 0 then
+            return
+        end
+        if sock:send(table.concat(buf)) then
+            for _ = 1, pending do
+                read_reply(sock)
+            end
+        end
+        buf = {}
+        pending = 0
+    end
+
     for ip, count in pairs(snapshot) do
         if count > 0 then
-            redis_do(sock, { "ZINCRBY", "bs:ip_hits", count, ip })
+            local args = { "ZINCRBY", "bs:ip_hits", count, ip }
+            buf[#buf + 1] = "*" .. #args .. "\r\n"
+            for _, a in ipairs(args) do
+                a = tostring(a)
+                buf[#buf + 1] = "$" .. #a .. "\r\n" .. a .. "\r\n"
+            end
+            pending = pending + 1
+            if pending >= BATCH then
+                flush_batch()
+            end
         end
     end
+    flush_batch()
 end
 
 local function refresh_bans(sock)

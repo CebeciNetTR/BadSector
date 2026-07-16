@@ -21,7 +21,9 @@ log() {
 
 setup_ipset() {
     if ! ipset list "$IPSET_NAME" &>/dev/null; then
-        ipset create "$IPSET_NAME" hash:ip timeout "$BAN_TTL"
+        # maxelem varsayilani 65536'dir; buyuk flood'da ban sayisi bunu asinca
+        # "ipset add" sessizce basarisiz olur. 1M'e cikariyoruz.
+        ipset create "$IPSET_NAME" hash:ip timeout "$BAN_TTL" maxelem 1048576
         log "ipset '$IPSET_NAME' olusturuldu (timeout: ${BAN_TTL}s)"
     fi
 

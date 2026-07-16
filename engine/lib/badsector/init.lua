@@ -114,44 +114,61 @@ end
 
 
 
+--- Ban lookup with shared-dict negatif cache. Istek basina Redis GET yerine IP
+--- basina ~5s'de bir Redis'e gidilir; flood altinda Redis QPS'i cok dusuk kalir.
+local function is_banned_cached(rip)
+    if not rip or rip == "" then
+        return false
+    end
+    local dict = ngx.shared.badsector_bans
+    if dict then
+        local cached = dict:get(rip)
+        if cached ~= nil then
+            return cached == 1
+        end
+    end
+    local banned = false
+    local redis = require("badsector.redis")
+    local red = redis.connect()
+    if red then
+        local val = red:get("bs:ban:" .. rip)
+        if val and val ~= ngx.null then
+            banned = true
+        end
+        redis.keepalive(red)
+    end
+    if dict then
+        -- Banli: 30s cache; degil: 5s (yeni ban en fazla 5s gecikmeyle gorulur).
+        dict:set(rip, banned and 1 or 0, banned and 30 or 5)
+    end
+    return banned
+end
+
 function _M.handle()
 
     config.sync_if_needed()
+
+    local uri = ngx.var.uri
+
+    -- Ucuz kisa devre: health/reload/acme Redis'e DOKUNMADAN doner. Flood altinda
+    -- HAProxy'nin engine health-check'i canli kalir -> engine DOWN sayilmaz.
+    if uri == "/badsector/health" or uri == "/badsector/admin/reload" then
+        return
+    end
+
+    local acme = require("badsector.acme")
+    if acme.is_challenge_path(uri) then
+        return
+    end
 
     local client_ip = require("badsector.client_ip")
     local rip = client_ip.from_request()
     ngx.var.badsector_client_ip = rip or ""
 
-    -- Redis ban check
-    local redis = require("badsector.redis")
-    local red = redis.connect()
-    if red then
-        local ban_key = "bs:ban:" .. (rip or "")
-        local is_banned, err = red:get(ban_key)
-        if is_banned and is_banned ~= ngx.null then
-            redis.keepalive(red)
-            require("badsector.metrics").incr("BAN_DROP")
-            return executor.drop()
-        end
-        redis.keepalive(red)
-    end
-
-    local uri = ngx.var.uri
-
-    if uri == "/badsector/health" or uri == "/badsector/admin/reload" then
-
-        return
-
-    end
-
-
-
-    local acme = require("badsector.acme")
-
-    if acme.is_challenge_path(uri) then
-
-        return
-
+    -- Ban check: shared-dict negatif cache (istek basina Redis GET yerine ~5s'de bir).
+    if is_banned_cached(rip) then
+        require("badsector.metrics").incr("BAN_DROP")
+        return executor.drop()
     end
 
 
