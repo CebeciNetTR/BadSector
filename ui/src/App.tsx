@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react'
 import { Routes, Route, NavLink } from 'react-router-dom'
-import { api } from './api/client'
+import { api, ApiError } from './api/client'
+import { clearToken, onUnauthorized } from './lib/auth'
+import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
 import Sites from './pages/Sites'
 import Policies from './pages/Policies'
@@ -30,19 +32,38 @@ const nav = [
 
 export default function App() {
   const [attackMode, setAttackMode] = useState<boolean>(false)
-  const [loading, setLoading] = useState<boolean>(true)
+  const [attackLoaded, setAttackLoaded] = useState<boolean>(false)
+  const [authState, setAuthState] = useState<'checking' | 'authed' | 'login'>('checking')
 
-  useEffect(() => {
+  // Doubles as the auth probe: a 401 here means we need to log in. Any other error
+  // (backend unreachable, etc.) still lets the shell render so pages show their own errors.
+  const verifyAuth = () => {
     api.getAttackMode()
       .then((res) => {
         setAttackMode(res.enabled)
-        setLoading(false)
+        setAttackLoaded(true)
+        setAuthState('authed')
       })
       .catch((err) => {
-        console.error('Failed to load attack mode status:', err)
-        setLoading(false)
+        if (err instanceof ApiError && err.status === 401) {
+          setAuthState('login')
+        } else {
+          console.error('Failed to load attack mode status:', err)
+          setAuthState('authed')
+        }
       })
+  }
+
+  useEffect(() => {
+    verifyAuth()
+    const unsub = onUnauthorized(() => setAuthState('login'))
+    return unsub
   }, [])
+
+  const handleLogout = () => {
+    clearToken()
+    setAuthState('login')
+  }
 
   const handleToggle = () => {
     const nextState = !attackMode
@@ -55,12 +76,28 @@ export default function App() {
       })
   }
 
+  if (authState === 'checking') {
+    return (
+      <div className="layout">
+        <main className="main">
+          <div className="card">
+            <p className="empty-state">Yükleniyor…</p>
+          </div>
+        </main>
+      </div>
+    )
+  }
+
+  if (authState === 'login') {
+    return <Login onSuccess={verifyAuth} />
+  }
+
   return (
     <div className="layout">
       <aside className="sidebar">
         <h1>BadSector</h1>
 
-        {!loading && (
+        {attackLoaded && (
           <div className="attack-mode-panel">
             <div className="attack-mode-header">
               <span className="attack-mode-title">Mitigation</span>
@@ -87,6 +124,14 @@ export default function App() {
             </NavLink>
           ))}
         </nav>
+
+        <button
+          onClick={handleLogout}
+          className="attack-mode-btn inactive"
+          style={{ marginTop: '1rem', width: '100%' }}
+        >
+          Çıkış Yap
+        </button>
       </aside>
       <main className="main">
         <Routes>

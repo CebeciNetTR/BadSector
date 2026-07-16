@@ -17,7 +17,7 @@ import type {
 } from '../types/securityModules'
 import type { DashboardMetrics } from '../types/metrics'
 import type { RequestTrace } from '../types/trace'
-import { authHeaders } from '../lib/auth'
+import { authHeaders, clearToken, notifyUnauthorized } from '../lib/auth'
 const BASE = import.meta.env.VITE_API_URL ?? '/api/v1'
 
 export interface LoginResponse {
@@ -53,6 +53,13 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
       message = body.message ?? body.error ?? message
     } catch {
       // ignore
+    }
+    // A 401 on any protected route means our token is missing/expired: drop it and
+    // let the app fall back to the login screen. The login call itself is exempt so
+    // "invalid credentials" stays on the login form.
+    if (res.status === 401 && path !== '/auth/login') {
+      clearToken()
+      notifyUnauthorized()
     }
     throw new ApiError(message, res.status)
   }
