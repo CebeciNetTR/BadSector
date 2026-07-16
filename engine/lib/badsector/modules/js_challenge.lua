@@ -29,6 +29,7 @@ local cfg = {
     pass_ttl = 3600,
     ban_threshold = 3,   -- 60s icinde bu kadar cozumsuz challenge -> ban
     ban_ttl = 86400,
+    template = "",       -- ozel challenge HTML (bos ise varsayilan sablon)
 }
 
 function M.init(config)
@@ -47,6 +48,7 @@ function M.reload(config)
     cfg.pass_ttl = tonumber(config.pass_ttl) or 3600
     cfg.ban_threshold = tonumber(config.ban_threshold) or 3
     cfg.ban_ttl = tonumber(config.ban_ttl) or 86400
+    cfg.template = type(config.template) == "string" and config.template or ""
 end
 
 --- Cookie header'indan tek bir cookie degerini cikarir.
@@ -147,6 +149,7 @@ function M.run(ctx, config)
         token = token,
         difficulty = diff,
         pow_cookie = cfg.pow_cookie,
+        template = cfg.template,
     })
 end
 

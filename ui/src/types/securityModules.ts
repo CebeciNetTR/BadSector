@@ -66,6 +66,9 @@ export interface JsChallengeConfig {
   pow_cookie?: string
   ban_threshold?: number
   ban_ttl?: number
+  /** Özel challenge HTML/CSS. Boşsa engine varsayılan şablonu kullanır.
+   *  PoW çözücü <script> her zaman engine tarafından enjekte edilir. */
+  template?: string
 }
 
 export interface CookieChallengeConfig {
@@ -180,8 +183,64 @@ export function defaultJsChallengeConfig(): JsChallengeConfig {
     pow_cookie: 'bs_pow',
     ban_threshold: 3,
     ban_ttl: 86400,
+    template: '',
   }
 }
+
+/** Engine'deki varsayılan challenge şablonu (challenge.lua default_template ile
+ *  aynı). Editöre "Varsayılanı yükle" ile bir başlangıç noktası verir.
+ *  PoW çözücü <script> engine tarafından otomatik eklenir — buraya yazma. */
+export const DEFAULT_CHALLENGE_TEMPLATE = `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Security Check | BadSector</title>
+    <style>
+        body {
+            background-color: #0f172a;
+            color: #f8fafc;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            overflow: hidden;
+        }
+        .container {
+            text-align: center;
+            max-width: 450px;
+            padding: 40px;
+            background: rgba(30, 41, 59, 0.7);
+            border-radius: 16px;
+            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.4);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        h1 { font-size: 24px; margin-bottom: 12px; font-weight: 600; }
+        p { color: #94a3b8; font-size: 15px; line-height: 1.5; margin-bottom: 24px; }
+        .spinner {
+            width: 48px; height: 48px;
+            border: 4px solid rgba(255, 255, 255, 0.1);
+            border-left-color: #3b82f6;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px auto;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        noscript { color: #f87171; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="spinner"></div>
+        <h1>Checking your browser</h1>
+        <p>Verifying your connection before continuing. This is automatic and helps block malicious traffic.</p>
+        <noscript>JavaScript is required to continue.</noscript>
+    </div>
+</body>
+</html>`
 
 export function defaultCookieChallengeConfig(): CookieChallengeConfig {
   return {

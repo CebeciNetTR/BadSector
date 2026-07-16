@@ -107,6 +107,15 @@ teyididir.
 | `pass_ttl` | 3600 | `bs_pass` geçerlilik (s) |
 | `pass_cookie` / `pow_cookie` | `bs_pass` / `bs_pow` | Cookie adları |
 | `ban_threshold` / `ban_ttl` | 3 / 86400 | Çözümsüz challenge banı |
+| `template` | `""` | Özel challenge HTML/CSS (boş = yerleşik varsayılan) |
+
+**Özel challenge sayfası (`template`):** Panelden (Edge Security → Challenges → JS
+Challenge) tam HTML/CSS yazılabilir. Görünür markup tamamen sizindir; PoW çözücü
+`<script>` engine tarafından her zaman otomatik enjekte edilir (`</body>` varsa
+öncesine, yoksa sona) — yani şablonu bozsanız bile doğrulama çalışır. Şablon
+`string.format` ile değil düz string olarak işlenir, bu yüzden CSS'teki `%`
+işaretlerini kaçırmanız gerekmez. Metinde `{{difficulty}}` yer tutucusu geçerli
+zorluk sayısıyla değiştirilir.
 
 **Env (engine):** `BADSECTOR_CHALLENGE_SECRET` (üretimde mutlaka değiştirin; tüm
 worker'lar aynı sırrı paylaşmalı), `BADSECTOR_POW_DIFFICULTY[_ATTACK]`,

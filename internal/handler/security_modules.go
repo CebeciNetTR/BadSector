@@ -59,6 +59,9 @@ func DefaultJsChallengeConfig() map[string]interface{} {
 		"pass_ttl":          3600,
 		"ban_threshold":     3,
 		"ban_ttl":           86400,
+		// Ozel challenge HTML sablonu (bos ise engine varsayilanini kullanir).
+		// PoW cozucu <script> her zaman engine tarafindan enjekte edilir.
+		"template": "",
 	}
 }
 

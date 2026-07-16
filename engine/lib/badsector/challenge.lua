@@ -1,64 +1,19 @@
 --[[
   Challenge issuer — JS, cookie, and captcha challenges.
+
+  JS challenge = imzali Proof-of-Work. Gorunur HTML/CSS site config'inden gelir
+  (custom template); PoW cozucu <script> her zaman engine tarafindan enjekte
+  edilir, boylece kullanici sablonu bozsa bile dogrulama calisir.
 ]]
 
 local util = require("badsector.util")
+local cjson = require("cjson")
 
 local _M = {}
 
---- Issue a challenge to the client.
----@param ctx table RequestContext
----@param challenge_type string
----@param opts table
-function _M.issue(ctx, challenge_type, opts)
-    opts = opts or {}
-
-    if challenge_type == "js" then
-        -- Imzali Proof-of-Work challenge (js_challenge modulu token + difficulty saglar).
-        local token = opts.token
-        local difficulty = tonumber(opts.difficulty) or 4
-        local pow_cookie = opts.pow_cookie or "bs_pow"
-        if type(token) ~= "string" or token == "" then
-            ngx.log(ngx.ERR, "badsector challenge: js PoW token eksik")
-            ngx.status = 403
-            return ngx.exit(403)
-        end
-        ngx.header["Content-Type"] = "text/html; charset=utf-8"
-        ngx.header["Cache-Control"] = "no-store"
-        ngx.status = 200
-        ngx.say(_M.js_challenge_page(token, difficulty, pow_cookie))
-        return ngx.exit(200)
-
-    elseif challenge_type == "cookie" then
-        local cookie_name = opts.cookie_name or "bs_verified"
-        local ttl = tonumber(opts.cookie_ttl) or 86400
-        local token = util.random_token(16)
-        ngx.header["Set-Cookie"] = cookie_name .. "=" .. token .. "; Path=/; Max-Age=" .. ttl .. "; HttpOnly; SameSite=Lax"
-        ngx.header["Cache-Control"] = "no-store"
-        ngx.status = 403
-        ngx.say("Verification required. Reload to continue.")
-        return ngx.exit(403)
-
-    elseif challenge_type == "captcha" then
-        ngx.status = 403
-        ngx.say("Captcha challenge — configure provider in site settings")
-        return ngx.exit(403)
-    end
-
-    ngx.status = 403
-    return ngx.exit(403)
-end
-
---- Imzali Proof-of-Work challenge sayfasi.
---- Tarayici, senkron SHA-256 ile token'i cozer (parcali dongu -> UI donmaz),
---- cozumu bs_pow cookie'sine yazip sayfayi yeniler. PoW maliyetini istemci oder;
---- sunucu yalnizca 1 hash ile dogrular.
----@param token string   Imzali challenge token (ts.d.salt.sig)
----@param difficulty number  Basta beklenen sifir (hex nibble) sayisi
----@param pow_cookie string   Cozum cookie adi (bs_pow)
----@return string
-function _M.js_challenge_page(token, difficulty, pow_cookie)
-    return string.format([[<!DOCTYPE html>
+-- Varsayilan gorunur sablon (PoW <script> HARIC; o ayrica enjekte edilir).
+-- Not: string.format KULLANILMAZ, bu yuzden CSS'teki % isaretleri literaldir.
+_M.default_template = [==[<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -92,7 +47,7 @@ function _M.js_challenge_page(token, difficulty, pow_cookie)
             width: 48px; height: 48px;
             border: 4px solid rgba(255, 255, 255, 0.1);
             border-left-color: #3b82f6;
-            border-radius: 50%%;
+            border-radius: 50%;
             animation: spin 1s linear infinite;
             margin: 0 auto 20px auto;
         }
@@ -107,9 +62,64 @@ function _M.js_challenge_page(token, difficulty, pow_cookie)
         <p>Verifying your connection before continuing. This is automatic and helps block malicious traffic.</p>
         <noscript>JavaScript is required to continue.</noscript>
     </div>
-    <script>
-    (function(){
-        // Kompakt senkron SHA-256 (public domain, geraintluff) — hex dondurur.
+</body>
+</html>]==]
+
+--- Issue a challenge to the client.
+---@param ctx table RequestContext
+---@param challenge_type string
+---@param opts table
+function _M.issue(ctx, challenge_type, opts)
+    opts = opts or {}
+
+    if challenge_type == "js" then
+        -- Imzali Proof-of-Work challenge (js_challenge modulu token + difficulty saglar).
+        local token = opts.token
+        local difficulty = tonumber(opts.difficulty) or 4
+        local pow_cookie = opts.pow_cookie or "bs_pow"
+        if type(token) ~= "string" or token == "" then
+            ngx.log(ngx.ERR, "badsector challenge: js PoW token eksik")
+            ngx.status = 403
+            return ngx.exit(403)
+        end
+        ngx.header["Content-Type"] = "text/html; charset=utf-8"
+        ngx.header["Cache-Control"] = "no-store"
+        ngx.status = 200
+        ngx.say(_M.js_challenge_page(token, difficulty, pow_cookie, opts.template))
+        return ngx.exit(200)
+
+    elseif challenge_type == "cookie" then
+        local cookie_name = opts.cookie_name or "bs_verified"
+        local ttl = tonumber(opts.cookie_ttl) or 86400
+        local token = util.random_token(16)
+        ngx.header["Set-Cookie"] = cookie_name .. "=" .. token .. "; Path=/; Max-Age=" .. ttl .. "; HttpOnly; SameSite=Lax"
+        ngx.header["Cache-Control"] = "no-store"
+        ngx.status = 403
+        ngx.say("Verification required. Reload to continue.")
+        return ngx.exit(403)
+
+    elseif challenge_type == "captcha" then
+        ngx.status = 403
+        ngx.say("Captcha challenge — configure provider in site settings")
+        return ngx.exit(403)
+    end
+
+    ngx.status = 403
+    return ngx.exit(403)
+end
+
+--- PoW cozucu <script> — token/difficulty/cookie guvenli sekilde gomulur.
+--- Senkron SHA-256 (public domain, geraintluff), parcali dongu (UI donmaz).
+--- string.format KULLANILMAZ; degiskenler cjson ile JS literal olarak gomulur.
+---@param token string
+---@param difficulty number
+---@param pow_cookie string
+---@return string
+local function pow_script(token, difficulty, pow_cookie)
+    local head = "<script>(function(){var TOKEN=" .. cjson.encode(token)
+        .. ",DIFF=" .. tostring(tonumber(difficulty) or 4)
+        .. ",COOKIE=" .. cjson.encode(pow_cookie) .. ";"
+    local logic = [==[
         function sha256(ascii){
             function rr(v,a){return (v>>>a)|(v<<(32-a));}
             var mp=Math.pow, mw=mp(2,32), res='';
@@ -124,11 +134,11 @@ function _M.js_challenge_page(token, difficulty, pow_cookie)
                 }
             }
             ascii+='\x80';
-            while(ascii.length%%64-56) ascii+='\x00';
+            while(ascii.length%64-56) ascii+='\x00';
             for(var i=0;i<ascii.length;i++){
                 var j=ascii.charCodeAt(i);
                 if(j>>8) return;
-                words[i>>2]|=j<<((3-i)%%4)*8;
+                words[i>>2]|=j<<((3-i)%4)*8;
             }
             words[words.length]=(bl/mw)|0;
             words[words.length]=bl;
@@ -163,7 +173,6 @@ function _M.js_challenge_page(token, difficulty, pow_cookie)
             }
             return res;
         }
-        var TOKEN=%q, DIFF=%d, COOKIE=%q;
         var PREFIX=new Array(DIFF+1).join('0');
         var nonce=0;
         function step(){
@@ -178,10 +187,39 @@ function _M.js_challenge_page(token, difficulty, pow_cookie)
             setTimeout(step,0);
         }
         step();
-    })();
-    </script>
-</body>
-</html>]], token, difficulty, pow_cookie)
+    ]==]
+    return head .. logic .. "})();</script>"
+end
+
+--- PoW <script>'i sablona enjekte eder: </body> varsa oncesine, yoksa sona.
+local function inject(html, script)
+    local out, n = html:gsub("</body>", function()
+        return script .. "\n</body>"
+    end, 1)
+    if n == 0 then
+        return html .. script
+    end
+    return out
+end
+
+--- Imzali Proof-of-Work challenge sayfasi.
+--- Gorunur HTML: `template` (site config), yoksa varsayilan. PoW <script> her
+--- zaman enjekte edilir. Sablonda {{difficulty}} yer tutucusu desteklenir.
+---@param token string        Imzali challenge token (ts.d.salt.sig)
+---@param difficulty number   Basta beklenen sifir (hex nibble) sayisi
+---@param pow_cookie string    Cozum cookie adi (bs_pow)
+---@param template string|nil  Site config'inden gelen ozel HTML (bos ise varsayilan)
+---@return string
+function _M.js_challenge_page(token, difficulty, pow_cookie, template)
+    local body = template
+    if type(body) ~= "string" or body == "" then
+        body = _M.default_template
+    end
+    -- Opsiyonel yer tutucu: {{difficulty}} -> sayi.
+    body = body:gsub("{{difficulty}}", function()
+        return tostring(tonumber(difficulty) or 4)
+    end)
+    return inject(body, pow_script(token, difficulty, pow_cookie))
 end
 
 return _M

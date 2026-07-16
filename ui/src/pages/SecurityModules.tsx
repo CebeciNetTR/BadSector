@@ -12,6 +12,7 @@ import {
   defaultGeoipConfig,
   defaultHeaderValidationConfig,
   defaultJsChallengeConfig,
+  DEFAULT_CHALLENGE_TEMPLATE,
   type AsnConfig,
   type BurstDetectionConfig,
   type CookieChallengeConfig,
@@ -420,6 +421,43 @@ export default function SecurityModules() {
                   Hariç tutulan path
                   <textarea rows={2} value={js.exclude_paths.join('\n')} onChange={(e) => { setJs({ ...js, exclude_paths: e.target.value.split('\n').filter(Boolean) }); markDirty() }} />
                 </label>
+
+                <div style={{ borderTop: '1px solid var(--border)', paddingTop: '1rem', marginTop: '0.5rem' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem' }}>
+                    <strong style={{ fontSize: '0.95rem' }}>Challenge sayfası (özel HTML/CSS)</strong>
+                    <div style={{ display: 'flex', gap: '0.5rem' }}>
+                      <button
+                        type="button"
+                        className="btn btn-sm"
+                        onClick={() => { setJs({ ...js, template: DEFAULT_CHALLENGE_TEMPLATE }); markDirty() }}
+                      >
+                        Varsayılanı yükle
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-sm"
+                        onClick={() => { setJs({ ...js, template: '' }); markDirty() }}
+                        disabled={!js.template}
+                      >
+                        Sıfırla
+                      </button>
+                    </div>
+                  </div>
+                  <p style={{ color: 'var(--muted)', fontSize: '0.8rem', margin: '0.5rem 0 0.75rem' }}>
+                    Boş bırakırsan yerleşik varsayılan sayfa gösterilir. PoW çözücü
+                    {' '}<code>&lt;script&gt;</code> her zaman otomatik eklenir (senin yazman gerekmez);
+                    HTML'inde <code>&lt;/body&gt;</code> varsa hemen öncesine, yoksa sona enjekte edilir.
+                    İstersen metinde <code>{'{{difficulty}}'}</code> yer tutucusunu kullanabilirsin.
+                  </p>
+                  <textarea
+                    rows={14}
+                    spellCheck={false}
+                    style={{ fontFamily: 'monospace', fontSize: '0.8rem', whiteSpace: 'pre', overflowWrap: 'normal', overflowX: 'auto' }}
+                    placeholder="Boş = varsayılan sayfa. Kendi HTML/CSS'ini buraya yaz."
+                    value={js.template ?? ''}
+                    onChange={(e) => { setJs({ ...js, template: e.target.value }); markDirty() }}
+                  />
+                </div>
               </div>
               <div className="card form-grid">
                 <h3>Cookie Challenge</h3>
