@@ -175,13 +175,21 @@ export function defaultBurstDetectionConfig(): BurstDetectionConfig {
 export function defaultJsChallengeConfig(): JsChallengeConfig {
   return {
     paths: ['/*'],
-    exclude_paths: ['/badsector/*'],
+    exclude_paths: [
+      '/badsector/*',
+      '/favicon.ico',
+      '/favicon-32x32.png',
+      '/favicon-16x16.png',
+      '/apple-touch-icon.png',
+      '/robots.txt',
+      '/sitemap.xml',
+    ],
     difficulty: 4,
     difficulty_attack: 5,
     pass_ttl: 3600,
     pass_cookie: 'bs_pass',
     pow_cookie: 'bs_pow',
-    ban_threshold: 3,
+    ban_threshold: 5,
     ban_ttl: 86400,
     template: '',
   }

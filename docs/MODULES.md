@@ -16,7 +16,7 @@ Implementation status as of latest development:
 | policies | Implemented |
 | rate_limiter | Implemented — see [RATE_LIMITER.md](RATE_LIMITER.md) |
 | burst_detection | Implemented |
-| js_challenge / cookie_challenge | Implemented |
+| js_challenge / cookie_challenge | Implemented — signed PoW; asset exclude; ban_threshold default 5 |
 | threat_intel | Implemented |
 | cache | Implemented (pass-through stub) |
 | managed_waf | Implemented — see [MANAGED_WAF.md](MANAGED_WAF.md) |
@@ -26,7 +26,7 @@ Implementation status as of latest development:
 |--------|-------|-------------|
 | `access_lists` | request | IP/CIDR allow and deny lists |
 | `trusted_bots` | request | Verify legitimate crawlers (DNS/rDNS) |
-| `ip_reputation` | request | Block known bad IPs from feeds |
+| `ip_reputation` | request | Static/Redis blocklist (not a live threat-intel download; empty by default) |
 | `geoip` | request | Resolve country/city from MMDB |
 | `asn` | request | Resolve autonomous system |
 | `header_validation` | request | Require/forbid headers |
@@ -35,7 +35,7 @@ Implementation status as of latest development:
 | `fingerprinting` | request | TLS/HTTP fingerprint matching |
 | `rate_limiter` | request | **Implemented** — Token bucket / sliding window (Redis) |
 | `burst_detection` | request | Short-window spike detection |
-| `js_challenge` | request | JavaScript proof-of-work |
+| `js_challenge` | request | Signed PoW; static assets skipped; document-only fail counter |
 | `cookie_challenge` | request | Cookie validation challenge |
 | `threat_intel` | request | External TI feed matching |
 | `policies` | request | Policy engine evaluation |

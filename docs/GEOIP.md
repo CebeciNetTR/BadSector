@@ -47,10 +47,18 @@ Config via **Edge Security → GeoIP** or `GET/PUT /api/v1/sites/:id/geoip`.
 | `block_countries` | ISO codes to block (e.g. `CN`, `RU`) |
 | `allow_countries` | With `allow_only: true` |
 | `allow_only` | Only listed countries pass |
-| `fail_open` | Continue if lookup fails |
+| `fail_open` | Continue if lookup fails (**production'da true kalsın**) |
 | `use_header_fallback` | Use `CF-IPCountry` / `X-Country-Code` if MMDB missing |
 
 Sets `ctx.enrich.geo` and `ctx.vars.country` for policy conditions.
+
+### Production notes (edge = BadSector)
+
+- **`allow_only` + `TR`**: Yabancı trafik ucuza 403; WAF/PoW'a gelmez. `trusted_bots` pipeline'da **önce** olduğu için doğrulanmış Googlebot/Bingbot muaf kalır.
+- **`fail_open: true`**: MMDB bir an eksikken tüm siteyi kilitlemez.
+- **`use_header_fallback`**: Siz Cloudflare arkasında değilseniz **kapatın**. Aksi halde istemci sahte `CF-IPCountry: TR` ile (MMDB çözülemediğinde) allow-list'i atlayabilir.
+- GeoIP **challenge muafiyeti değildir** — TR kullanıcı attack mode / js_challenge açıksa yine challenge görür. Challenge'ı kapatmak veya attack mode'u kapalı tutmak ayrı ayardır.
+- Performans: MMDB memory-map; istek başına mikrosaniye civarı — 8GB kutuda pahalı değil, flood'da pahalı modüllerden önce keser.
 
 ## ASN module
 

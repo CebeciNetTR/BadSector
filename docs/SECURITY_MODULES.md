@@ -92,7 +92,7 @@ teyididir.
    senkron SHA-256 ile `sha256(token:nonce)` başında `difficulty` adet hex sıfır
    olacak bir `nonce` bulur (PoW maliyetini **istemci** öder).
 2. Çözümü `bs_pow` cookie'sine yazıp yeniler. Sunucu **1 hash** ile doğrular,
-   imzalı `bs_pass` gecis cookie'si verir (302).
+   imzalı `bs_pass` geçiş cookie'si verir (**302 REDIRECT** + `Set-Cookie`).
 3. Sonraki istekler `bs_pass` ile **1 HMAC** (~µs) doğrulanır → hızlı yol.
 
 **Token'lar (stateless HMAC-SHA256):**
@@ -101,13 +101,21 @@ teyididir.
 
 | Field | Default | Description |
 |-------|---------|-------------|
-| `paths` / `exclude_paths` | `/*` / `/badsector/*` | Uygulama kapsamı |
+| `paths` / `exclude_paths` | `/*` / `/badsector/*`, favicon, robots… | Uygulama kapsamı |
 | `difficulty` | 4 | Normal zorluk (başta hex sıfır ≈ 2^16 hash) |
 | `difficulty_attack` | 5 | Attack mode'da otomatik yükselen zorluk (≈ 2^20) |
 | `pass_ttl` | 3600 | `bs_pass` geçerlilik (s) |
 | `pass_cookie` / `pow_cookie` | `bs_pass` / `bs_pow` | Cookie adları |
-| `ban_threshold` / `ban_ttl` | 3 / 86400 | Çözümsüz challenge banı |
+| `ban_threshold` / `ban_ttl` | **5** / 86400 | Çözümsüz challenge banı (60s pencere) |
 | `template` | `""` | Özel challenge HTML/CSS (boş = yerleşik varsayılan) |
+
+**Statik asset muafiyeti (önemli):** `favicon.ico`, `*.css`, `*.js`, `*.png` vb. uzantılar
+ve varsayılan exclude listesi **challenge almaz** ve ban sayacına yazılmaz. Aksi halde
+tek sayfa yükü (HTML + favicon) sayacı doldurup meşru IP'yi banlardı.
+
+**Ban sayacı:** Yalnızca belge navigasyonu (`Sec-Fetch-Dest: document` veya
+`Accept: text/html`) ve geçersiz PoW çözümünde artar. Redis ban değeri:
+`bs:ban:<ip> = "js_challenge"` (watcher ban'ından ayırt etmek için).
 
 **Özel challenge sayfası (`template`):** Panelden (Edge Security → Challenges → JS
 Challenge) tam HTML/CSS yazılabilir. Görünür markup tamamen sizindir; PoW çözücü
@@ -130,9 +138,10 @@ challenge başına ~1 HMAC + 1 hash (~µs). Asıl maliyet TLS handshake + sayfa
 egress'idir ve auto-ban sayesinde IP başına birkaç istekle sınırlıdır.
 
 > [!NOTE]
-> **Otomatik ban**: Bir istemci 60 sn içinde `ban_threshold` (varsayılan 3) kez
-> challenge alıp çözemezse IP'si 24 saat banlanır; sonraki istekler edge'de
-> sessizce düşürülür (silent-drop).
+> **Otomatik ban**: Bir istemci 60 sn içinde `ban_threshold` (varsayılan **5**) kez
+> *belge* challenge'ı alıp çözemezse IP Redis'te 24 saat banlanır
+> (`bs:ban:<ip>`). Attack mode açıkken HAProxy silent-drop uygular; kapalıyken
+> engine erken drop eder. **Watcher iptables ban'ından farklıdır** (ipset'te olmayabilir).
 
 > [!IMPORTANT]
 > PoW gerçek bir tarayıcı (JavaScript + SHA-256) gerektirir. JS çalıştırmayan
@@ -155,9 +164,34 @@ Sets HttpOnly verification cookie on first visit; subsequent requests pass.
 
 To handle massive DDoS floods without exhausting OpenResty (engine) resources:
 
-1. **HAProxy Lua Ban Check**: When attack mode is enabled (`redis-cli set bs:attack_mode 1`), HAProxy checks Redis for `bs:ban:<ip>` on every request and silently drops banned IPs (`http-request silent-drop`) without passing them to the engine or wasting port resources.
-2. **IP Watcher Service**: A privileged daemon container that monitors HAProxy request hit counters in Redis (`bs:ip_hits`). If an IP exceeds `BAN_THRESHOLD` (default 1000 hits in 30s), the watcher automatically bans the IP for 24 hours in both the host firewall via `iptables` / `ipset` (zero CPU overhead) and Redis.
-3. **Daily Reset**: Every day at midnight (00:00), the watcher resets hit counters and flushes the host `ipset` blocklist.
+1. **HAProxy Lua Ban Check** (`deploy/haproxy/lua/ban_check.lua`): Attack mode açıkken (`bs:attack_mode=1`) bellekteki ban tablosunu okur; banlı IP'leri `silent-drop` eder. Hit sayaçlarını arka planda Redis'e **pipeline batch** ile yazar (80k+ IP flood'da Redis'i boğmamak için).
+2. **IP Watcher** (`deploy/watcher`): `bs:ip_hits` sorted set'ini izler. Eşik aşılınca (`BAN_THRESHOLD`, varsayılan 1000 — kümülatif, gece sıfırlanır) IP'yi **host ipset** (`bs_banned`, `maxelem` 1M) + Redis `bs:ban:<ip>` ile banlar. Ban TTL: `BAN_TTL` (varsayılan 86400). `network_mode: host` + `privileged` — iptables host'a yazılır; konteyner dursa bile kural kalır (reboot temizler).
+3. **Daily Reset**: Gece 00:00'da hit sayaçları ve ipset flush. Redis kısa süre erişilemez olsa watcher **crash-loop yapmaz** (`set -e` yok).
+4. **Engine ban cache**: `init.lua` istek başına Redis GET yerine shared-dict negatif cache kullanır; `/badsector/health` Redis'e dokunmaz.
+
+### Ban kaynağını teşhis
+
+```bash
+IP=1.2.3.4
+docker compose exec -T redis redis-cli get "bs:ban:$IP"    # "js_challenge" veya "1"
+docker compose exec -T redis redis-cli ttl "bs:ban:$IP"
+docker compose exec -T redis redis-cli get "bs:js_fail:$IP"
+docker compose exec -T redis redis-cli zscore bs:ip_hits "$IP"
+sudo ipset test bs_banned "$IP"                            # watcher ise burada olur
+docker compose logs --since 2h engine | grep -iE "banland|$IP"
+docker compose logs --since 2h watcher | grep -iE "BANNED|$IP"
+```
+
+| Bulgu | Kaynak |
+|--------|--------|
+| Engine log `cozumsuz JS challenge` / Redis değeri `js_challenge` | JS challenge auto-ban |
+| Watcher log `BANNED` + ipset'te | Watcher (hit eşiği) |
+| Sadece Redis, ipset yok | Challenge / cookie ban (iptables yok) |
+
+> [!WARNING]
+> Watcher iptables DROP **tüm portları** (SSH dahil) keser. Admin IP'yi yanlışlıkla
+> eşiğe sokarsanız SSH kilitlenebilir — farklı IP / VPN / sağlayıcı KVM ile girip
+> `ipset flush bs_banned` veya `docker compose stop watcher` yapın.
 
 ## API
 

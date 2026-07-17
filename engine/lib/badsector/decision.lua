@@ -34,13 +34,15 @@ end
 --- Build a REDIRECT decision.
 ---@param url string Target URL
 ---@param status number|nil HTTP status (default 302)
+---@param headers table|nil Extra response headers (e.g. Set-Cookie)
 ---@return table
-function _M.redirect(url, status)
+function _M.redirect(url, status, headers)
     return {
         action = "REDIRECT",
         terminal = true,
         status = status or 302,
         url = url,
+        headers = headers or {},
     }
 end
 

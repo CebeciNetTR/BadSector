@@ -37,19 +37,35 @@ function _M.apply(ctx)
         return
 
     elseif action == "BLOCK" or action == "CUSTOM_RESPONSE" then
+        local status = d.status or 403
+        -- 3xx: bos govdeli CUSTOM_RESPONSE + "block" header tarayicida kisa
+        -- "sayfa bulunamadi" / hata flash'i uretir (PoW sonrasi 302). Gercek redirect kullan.
+        if status >= 300 and status < 400 and d.headers and d.headers["Location"] then
+            for k, v in pairs(d.headers) do
+                if k ~= "Location" then
+                    ngx.header[k] = v
+                end
+            end
+            return ngx.redirect(d.headers["Location"], status)
+        end
         ngx.header["X-BadSector-Action"] = "block"
-        ngx.status = d.status or 403
+        ngx.status = status
         for k, v in pairs(d.headers or {}) do
             ngx.header[k] = v
         end
         ngx.say(d.body or "")
-        return ngx.exit(d.status or 403)
+        return ngx.exit(status)
 
     elseif action == "RETURN_444" then
         ngx.header["X-BadSector-Action"] = "block"
         return _M.drop()
 
     elseif action == "REDIRECT" then
+        for k, v in pairs(d.headers or {}) do
+            if k ~= "Location" then
+                ngx.header[k] = v
+            end
+        end
         return ngx.redirect(d.url, d.status or 302)
 
     elseif action == "RATE_LIMIT" then

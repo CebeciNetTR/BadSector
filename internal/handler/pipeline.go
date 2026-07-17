@@ -118,7 +118,7 @@ func defaultModuleConfig(module string) string {
 		"header_validation": `{"enabled":true,"required":[],"forbidden":[],"rules":[]}`,
 		"custom_rules":      `{"enabled":true,"fail_open":true,"rules":[]}`,
 		"burst_detection":   `{"enabled":true,"window":10,"threshold":50,"key_by":"ip","paths":["/*"],"action":"rate_limit","fail_open":true}`,
-		"js_challenge":      `{"enabled":false,"paths":["/*"],"exclude_paths":["/badsector/*"],"cookie_name":"bs_js_ok","cookie_ttl":3600}`,
+		"js_challenge":      `{"enabled":false,"paths":["/*"],"exclude_paths":["/badsector/*","/favicon.ico","/robots.txt"],"pass_cookie":"bs_pass","pow_cookie":"bs_pow","difficulty":4,"difficulty_attack":5,"pass_ttl":3600,"ban_threshold":5,"ban_ttl":86400}`,
 		"cookie_challenge":  `{"enabled":false,"paths":["/*"],"exclude_paths":["/badsector/*"],"cookie_name":"bs_verified","cookie_ttl":86400}`,
 		"threat_intel":      `{"enabled":true,"redis_key":"badsector:threat_intel:bad","fail_open":true}`,
 		"cache":             `{"enabled":false,"ttl":60}`,

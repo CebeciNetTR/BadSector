@@ -50,9 +50,11 @@ git push -u origin main
 ## 2. Sunucuya kurulum (tek komut)
 
 Sunucu gereksinimleri:
-- Ubuntu 22.04+ / Debian 12+
+- Ubuntu 22.04+ / Debian 12+ (**KVM** önerilir — watcher iptables/ipset kullanır)
 - Root veya sudo
-- Portlar: **80**, **443**, **3000** (admin), **9080** (dev edge)
+- Önerilen: 4+ vCPU / 8 GB RAM (düşük-orta edge; büyük botnet için CDN/scrubbing ekleyin)
+- Portlar: **80**, **443** (public); admin UI (`BADSECTOR_UI_PORT`, varsayılan **3000**); **9080** (dev edge)
+- Redis/Postgres/API compose'ta yalnızca **127.0.0.1** üzerinde dinler (internete açmayın)
 
 ### Yöntem A — clone + script
 
@@ -84,9 +86,12 @@ curl -fsSL https://raw.githubusercontent.com/KULLANICI_ADINIZ/BadSector/main/scr
 ```bash
 # Auth — production'da mutlaka açın
 BADSECTOR_AUTH_DISABLED=false
-BADSECTOR_JWT_SECRET=uzun-rastgele-bir-string
+BADSECTOR_JWT_SECRET=$(openssl rand -hex 32)   # .env'e gerçek hex yazın; $(...) literal olmasın
 BADSECTOR_ADMIN_USER=admin
 BADSECTOR_ADMIN_PASSWORD=guclu-sifre
+
+# PoW challenge HMAC — üretimde mutlaka güçlü rastgele
+BADSECTOR_CHALLENGE_SECRET=$(openssl rand -hex 32)
 
 # TLS
 BADSECTOR_HAPROXY_CONFIG=live
@@ -95,6 +100,9 @@ BADSECTOR_ACME_STAGING=false
 
 # GeoIP
 MAXMIND_LICENSE_KEY=your_maxmind_key
+
+# Admin UI host portu (opsiyonel; varsayılan 3000)
+# BADSECTOR_UI_PORT=8443
 
 # Opsiyonel
 BADSECTOR_DEFAULT_BACKEND_URL=http://backend:80
@@ -177,21 +185,42 @@ docker-compose restart haproxy
 
 ---
 
-## 5. Firewall
+## 5. Firewall ve port sertleştirme
+
+Compose zaten Redis (`6379`), Postgres (`5432`), API (`8080`) için **127.0.0.1** bind kullanır.
+Public olması gerekenler: **80**, **443** (ve isteğe bağlı admin UI portu).
 
 ```bash
 sudo ufw allow 22/tcp
 sudo ufw allow 80/tcp
 sudo ufw allow 443/tcp
-sudo ufw allow 3000/tcp   # admin UI — production'da VPN/SSH tunnel önerilir
+# Admin UI — mümkünse dışarı açmayın; SSH tunnel kullanın
+# sudo ufw allow 3000/tcp
 sudo ufw enable
 ```
 
-Production'da `:3000` dışarıya açmak yerine SSH tunnel:
+Admin UI'ye tunnel ile:
 
 ```bash
 ssh -L 3000:localhost:3000 user@sunucu-ip
 # Tarayıcı: http://localhost:3000
+```
+
+`BADSECTOR_UI_PORT` değiştirdiyseniz tunnel hedef portunu ona göre ayarlayın.
+
+> [!WARNING]
+> Docker publish, `ufw` kurallarını bypass edebilir. Redis/Postgres'in `0.0.0.0`'da
+> olmadığını doğrulayın: `ss -tlnp | grep -E ':6379|:5432|:8080'` → yalnızca `127.0.0.1`.
+
+### Watcher / SSH kilidi
+
+Watcher ban'ı host `iptables` + `ipset bs_banned` yazar — **SSH dahil tüm portlar** düşer.
+Kendinizi kilitlerseniz: farklı IP/VPN, sağlayıcı KVM/reboot, sonra:
+
+```bash
+sudo ipset flush bs_banned
+sudo iptables -D INPUT -m set --match-set bs_banned src -j DROP 2>/dev/null
+cd /opt/badsector && docker compose stop watcher   # geçici
 ```
 
 ---
@@ -200,12 +229,17 @@ ssh -L 3000:localhost:3000 user@sunucu-ip
 
 | Adım | Nerede |
 |------|--------|
-| Site oluştur (hostname = domain) | Dashboard → Sites |
-| Pipeline modülleri | Pipeline |
-| GeoIP MMDB (worker indirir) | `MAXMIND_LICENSE_KEY` + worker log |
+| Site oluştur (hostname = domain, typo yok) | Dashboard → Sites |
+| Pipeline — tikler kaydedilir (Enabled DB kolonu) | Pipeline |
+| GeoIP allow-list / block | Edge Security → GeoIP; `fail_open=true` kalsın |
+| Header fallback | Edge değilseniz kapatın (sahte `CF-IPCountry` riski) |
+| GeoIP MMDB | `MAXMIND_LICENSE_KEY` + worker log |
+| JS challenge eşiği | Challenges → `ban_threshold` (varsayılan 5) |
 | TLS sertifikası | Certificates → Let's Encrypt Al |
 | HAProxy TLS reload | `docker compose restart haproxy` |
 | Smoke test | `./scripts/smoke-test.sh` |
+
+**TR-odaklı site önerisi:** GeoIP `allow_only` + `TR`; `trusted_bots` açık; attack mode normalde kapalı (acil durumda aç).
 
 ---
 
@@ -222,6 +256,11 @@ ssh -L 3000:localhost:3000 user@sunucu-ip
 | GeoIP eksik | Worker log: `docker compose logs worker` |
 | Sertifika alınamıyor | DNS, port 80, `BADSECTOR_HAPROXY_CONFIG=live`, `bash scripts/fix-certs-layout.sh` |
 | HAProxy Restarting | `bash scripts/fix-certs-layout.sh`; geçersiz `data/certs/haproxy/*.pem` silinir/yeniden oluşturulur |
+| Redis/API yok / UI gelmiyor | `docker compose ps` — restart policy; `docker compose up -d` |
+| Pipeline tikleri geri aktif oluyor | Eski bug (GORM); güncel API'de düzeldi — `update-server.sh --services api,ui` |
+| JS challenge ile yanlış ban (favicon) | Güncel engine: asset muaf + eşik 5; ban aç: `redis-cli del bs:ban:IP` |
+| ERR_TOO_MANY_REDIRECTS | Origin force-HTTPS + BadSector HTTP proxy; backend URL kendi domain olmasın; `X-Forwarded-Proto` |
+| SSH yok, site de yok | Muhtemel ipset ban — KVM/reboot veya başka IP; bkz. §5 Watcher |
 
 ---
 

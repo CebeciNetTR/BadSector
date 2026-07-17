@@ -48,16 +48,24 @@ func DefaultBurstDetectionConfig() map[string]interface{} {
 
 func DefaultJsChallengeConfig() map[string]interface{} {
 	return map[string]interface{}{
-		"enabled":       false,
-		"paths":         []interface{}{"/*"},
-		"exclude_paths": []interface{}{"/badsector/*"},
+		"enabled": false,
+		"paths":   []interface{}{"/*"},
+		"exclude_paths": []interface{}{
+			"/badsector/*",
+			"/favicon.ico",
+			"/favicon-32x32.png",
+			"/favicon-16x16.png",
+			"/apple-touch-icon.png",
+			"/robots.txt",
+			"/sitemap.xml",
+		},
 		// Imzali Proof-of-Work parametreleri (stateless HMAC).
 		"pass_cookie":       "bs_pass",
 		"pow_cookie":        "bs_pow",
 		"difficulty":        4, // normal (basta hex sifir sayisi ~ 2^16 hash)
 		"difficulty_attack": 5, // attack mode'da otomatik yukselir (~2^20 hash)
 		"pass_ttl":          3600,
-		"ban_threshold":     3,
+		"ban_threshold":     5,
 		"ban_ttl":           86400,
 		// Ozel challenge HTML sablonu (bos ise engine varsayilanini kullanir).
 		// PoW cozucu <script> her zaman engine tarafindan enjekte edilir.

@@ -28,17 +28,27 @@
      L4 only            L7 all
 ```
 
-### HAProxy (Layer 4)
+### HAProxy (edge)
 
-HAProxy handles only:
+HAProxy handles:
 
 - TLS termination
-- HTTP/2 and HTTP/3
-- Stick tables (session affinity at connection level)
-- Connection limits
-- Layer 4 optimizations
+- HTTP/2 (and optional HTTP/3 in some configs)
+- Stick tables (per-IP conn / request rate)
+- Connection limits (`maxconn`), thread count (`nbthread`)
+- **Attack-mode edge controls** (Lua `ban_check`): Redis-backed ban silent-drop, hit accounting (batched flush to Redis), optional HTTP 429 under attack mode
 
-HAProxy does **not** inspect request bodies, apply WAF rules, or make security decisions.
+HAProxy does **not** inspect request bodies or run Coraza/WAF. Full L7 policy, GeoIP, PoW, and WAF run in OpenResty.
+
+### Flood path (summary)
+
+```
+Client → HAProxy (TLS, optional silent-drop if banned + attack mode)
+      → Engine (health/acme short-circuit; ban negative-cache; pipeline)
+      → Watcher (async): high hit IPs → host ipset DROP (all ports) + Redis ban
+```
+
+Engine never does a Redis round-trip on `/badsector/health` (keeps HAProxy health checks alive under load).
 
 ### OpenResty Engine (Layer 7)
 

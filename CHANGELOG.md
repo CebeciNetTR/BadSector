@@ -4,6 +4,25 @@ All notable changes to BadSector are documented here.
 
 ## [Unreleased]
 
+### Security / Hardening
+
+- **Redis / Postgres / API artık internete kapalı** — Compose portları `127.0.0.1` bind; şifresiz Redis dışarıdan erişilemez (önceki Cross-Protocol / FLUSHALL riski).
+- **Tüm servislere `restart: unless-stopped`** — Redis/API/UI çökünce kendiliğinden ayağa kalkar.
+- **Flood dayanıklılığı (engine)** — Health/ACME/reload Redis ban check'ten önce döner (HAProxy engine DOWN zinciri kırıldı). Ban lookup `lua_shared_dict badsector_bans` negatif cache (~5s). ([DEPLOY.md](docs/DEPLOY.md), [ARCHITECTURE.md](docs/ARCHITECTURE.md))
+- **HAProxy `flush_hits` pipeline** — 80k+ IP'de tek tek ZINCRBY yerine 1000'lik batch (Redis boğulması).
+- **Watcher** — `set -e` kaldırıldı (Redis kısa düşüşünde crash-loop yok); ipset `maxelem` 1M.
+
+### Fixed
+
+- **Pipeline tik kaldırma kaybolmuyordu** — GORM `Enabled bool` + `default:true` false değerini DB'ye yazmıyordu; Create'te `Select` + model tag düzeltmesi. Pipeline kaydı artık config göndermez (placeholder GeoIP ezmesi yok).
+- **JS challenge favicon ban** — `/favicon.ico` ve statik asset'ler challenge dışı; ban sayacı yalnızca belge navigasyonunda artar. Eşik varsayılan **5**. PoW sonrası boş 302/`block` flash'i → düzgün REDIRECT + Set-Cookie.
+
+### Changed
+
+- **Donanım varsayımları (8GB / 4 thread)** — Redis `maxmemory 512mb` + LRU; Postgres ölçülü shared_buffers; HAProxy `maxconn 40000`.
+- **Admin UI portu** — `.env` ile `BADSECTOR_UI_PORT` (varsayılan 3000).
+- **JS challenge** — `ban_threshold` 3→5; ban Redis değeri `js_challenge` (kaynak ayrımı).
+
 ### Added
 
 - **İmzalı Proof-of-Work JS challenge** — Taklit edilebilen eski "cookie=1" mantığı, stateless HMAC-SHA256 imzalı PoW ile değiştirildi (`engine/lib/badsector/crypto.lua`, `pow.lua`). İstemci senkron SHA-256 ile çözer; sunucu 1 hash ile doğrular ve imzalı `bs_pass` gecis cookie'si verir (hızlı yol, ~µs). Zorluk attack mode'da otomatik yükselir. HAProxy edge fast-path: `bs_pass` taşıyanlar attack-429'undan muaf. `BADSECTOR_CHALLENGE_SECRET` env (üretimde değiştirin). ([SECURITY_MODULES.md](docs/SECURITY_MODULES.md))
