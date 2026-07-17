@@ -39,7 +39,9 @@ type PipelineStage struct {
 	SiteID    string         `gorm:"index;not null" json:"site_id"`
 	Module    string         `gorm:"not null" json:"module"`
 	Order     int            `gorm:"not null" json:"order"`
-	Enabled   bool           `gorm:"default:true" json:"enabled"`
+	// default:true KULLANMA — GORM bool false'u zero-value sayip yazmazdi;
+	// Pipeline'da tik kaldirma kaydedilmiyordu. Uygulama kodu Enabled'i acik set eder.
+	Enabled   bool           `json:"enabled"`
 	Config    string         `gorm:"type:text" json:"config"` // JSON
 	CreatedAt time.Time      `json:"created_at"`
 	UpdatedAt time.Time      `json:"updated_at"`

@@ -116,10 +116,12 @@ export function stagesFromApi(stages: PipelineStage[]): EditablePipelineStage[] 
 }
 
 export function stagesToPayload(stages: EditablePipelineStage[]): PipelineStagePayload[] {
+  // Config'i bos gonder: Pipeline sayfasi sadece sira/enabled duzenler.
+  // Sunucu mevcut DB config'ini korur (DEFAULT placeholder GeoIP vb. ezmesin).
   return stages.map((s) => ({
     module: s.module,
     enabled: s.enabled,
-    config: s.config || DEFAULT_MODULE_CONFIG[s.module] || '{}',
+    config: '',
   }))
 }
 

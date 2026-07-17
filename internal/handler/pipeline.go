@@ -62,7 +62,7 @@ func (h *Handler) updatePipeline(c echo.Context) error {
 	stages := make([]db.PipelineStage, 0, len(input))
 	for i, in := range input {
 		cfg := ""
-		// Pipeline UI only controls order/enabled — never overwrite module config from stale browser state.
+		// Pipeline UI only controls order/enabled — never overwrite module config from stale browser defaults.
 		if existing, ok := existingConfig[in.Module]; ok && existing != "" {
 			cfg = mergeStageConfig(in.Module, in.Config, existing)
 		} else if in.Config != "" {
@@ -71,6 +71,8 @@ func (h *Handler) updatePipeline(c echo.Context) error {
 		if cfg == "" {
 			cfg = defaultModuleConfig(in.Module)
 		}
+		// Keep config.enabled in sync with pipeline stage (Security Modules pages read both).
+		cfg = syncConfigEnabled(cfg, in.Enabled)
 
 		stages = append(stages, db.PipelineStage{
 			ID:      db.NewID(),
@@ -82,7 +84,9 @@ func (h *Handler) updatePipeline(c echo.Context) error {
 		})
 	}
 
-	if err := h.db.Create(&stages).Error; err != nil {
+	// GORM: bool zero-value (false) + gorm:"default:true" -> DB'ye yazilmaz, true kalir.
+	// Select ile Enabled alanini zorla yazdiriyoruz (tik kaldirma bug'i).
+	if err := h.db.Select("ID", "SiteID", "Module", "Order", "Enabled", "Config").Create(&stages).Error; err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
