@@ -3,8 +3,10 @@
 # Redis'teki bs:ip_hits sorted set'ini izler.
 # Esigi asan IP'leri iptables (ipset) + Redis ile banlar.
 # Gece 00:00'da hit sayaclarini ve ipset'i temizler.
-
-set -e
+#
+# NOT: Bilincli olarak "set -e" KULLANMIYORUZ. Bu uzun-omurlu bir daemon;
+# Redis bir an erisilemez oldugunda (flood/restart) tek bir komut hatasi tum
+# script'i oldurup crash-loop'a sokmamali. Hatalar tolere edilir, dongu devam eder.
 
 REDIS_HOST="${BADSECTOR_REDIS_HOST:-127.0.0.1}"
 REDIS_PORT="${BADSECTOR_REDIS_PORT:-6379}"

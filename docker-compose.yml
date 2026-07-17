@@ -1,11 +1,16 @@
 services:
   redis:
     image: redis:7-alpine
+    restart: unless-stopped
     # 8GB kutuda Redis'in sinirsiz buyumesini engelle. Veriler (rate sayaclari,
     # ban listesi, PoW token, trace) TTL'li oldugu icin allkeys-lru guvenli.
     command: ["redis-server", "--maxmemory", "512mb", "--maxmemory-policy", "allkeys-lru", "--save", "", "--appendonly", "no"]
     ports:
-      - "6379:6379"
+      # SADECE localhost — Redis internete ACIK OLMAMALI (sifre yok; disaridan
+      # FLUSHALL/CONFIG suistimali + RCE riski). Watcher host'tan 127.0.0.1:6379
+      # kullandigi icin publish localhost'ta kaliyor. Diger servisler docker
+      # network'unden "redis" servis adiyla erisir (port publish'e ihtiyac yok).
+      - "127.0.0.1:6379:6379"
     volumes:
       - redis_data:/data
     healthcheck:
@@ -21,6 +26,7 @@ services:
 
   postgres:
     image: postgres:16-alpine
+    restart: unless-stopped
     environment:
       POSTGRES_USER: badsector
       POSTGRES_PASSWORD: badsector
@@ -39,7 +45,8 @@ services:
       - -c
       - max_connections=50
     ports:
-      - "5432:5432"
+      # SADECE localhost — Postgres internete acik olmamali.
+      - "127.0.0.1:5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -54,6 +61,7 @@ services:
         max-file: "3"
 
   api:
+    restart: unless-stopped
     build:
       context: .
       dockerfile: api/Dockerfile
@@ -75,7 +83,9 @@ services:
       BADSECTOR_ACME_EMAIL: ${BADSECTOR_ACME_EMAIL:-}
       BADSECTOR_ACME_STAGING: ${BADSECTOR_ACME_STAGING:-false}
     ports:
-      - "8080:8080"
+      # SADECE localhost — API'ye tarayici, ui nginx uzerinden (/api proxy) erisir;
+      # disaridan dogrudan 8080'e erisime gerek yok.
+      - "127.0.0.1:8080:8080"
     volumes:
       - runtime_config:/runtime
       - api_data:/data
@@ -209,22 +219,27 @@ services:
 
   backend:
     image: nginx:alpine
+    restart: unless-stopped
     ports:
-      - "8081:80"
+      # Demo backend — sadece localhost.
+      - "127.0.0.1:8081:80"
 
   ui:
+    restart: unless-stopped
     build:
       context: ./ui
       dockerfile: Dockerfile
       args:
         VITE_API_URL: /api/v1
     ports:
+      # Admin panel. Production'da disariya acmak yerine SSH tunnel/firewall onerilir.
       - "3000:3000"
     depends_on:
       api:
         condition: service_healthy
 
   worker:
+    restart: unless-stopped
     build:
       context: .
       dockerfile: worker/Dockerfile
