@@ -232,8 +232,10 @@ services:
       args:
         VITE_API_URL: /api/v1
     ports:
-      # Admin panel. Production'da disariya acmak yerine SSH tunnel/firewall onerilir.
-      - "3000:3000"
+      # Admin panel. Host portu .env'den BADSECTOR_UI_PORT ile degistirilebilir
+      # (varsayilan 3000). Ic port sabit 3000. Ornek: BADSECTOR_UI_PORT=8443
+      # Not: port degistirmek "gizleme"dir; asil guvenlik firewall/SSH tunnel.
+      - "${BADSECTOR_UI_PORT:-3000}:3000"
     depends_on:
       api:
         condition: service_healthy
