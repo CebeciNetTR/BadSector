@@ -288,6 +288,7 @@ cd /opt/badsector && docker compose stop watcher   # geçici
 ├── .env              # secrets (git'te yok)
 ├── data/
 │   ├── geoip/        # MaxMind MMDB (worker indirir)
+│   ├── challenge/    # template.html — ortak JS challenge (git'te YOK)
 │   └── certs/
 │       ├── haproxy/  # PEM files for HAProxy (:443)
 │       ├── private/  # split crt/key

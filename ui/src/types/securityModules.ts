@@ -2,6 +2,8 @@ export interface ModuleStageResponse<T = Record<string, unknown>> {
   enabled: boolean
   config: T
 }
+export type GeoipDenyAction = 'block' | 'drop' | 'challenge'
+
 export interface GeoipConfig {
   database_path: string
   fail_open: boolean
@@ -9,6 +11,8 @@ export interface GeoipConfig {
   allow_countries: string[]
   allow_only: boolean
   use_header_fallback: boolean
+  /** block=403 | drop=444 silent | challenge=JS PoW */
+  deny_action: GeoipDenyAction
 }
 
 export interface GeoipStatus {
@@ -66,7 +70,7 @@ export interface JsChallengeConfig {
   pow_cookie?: string
   ban_threshold?: number
   ban_ttl?: number
-  /** Özel challenge HTML/CSS. Boşsa engine varsayılan şablonu kullanır.
+  /** Özel challenge HTML/CSS. Boşsa: sunucu global dosyası, yoksa yerleşik şablon.
    *  PoW çözücü <script> her zaman engine tarafından enjekte edilir. */
   template?: string
 }
@@ -143,6 +147,7 @@ export function defaultGeoipConfig(): GeoipConfig {
     allow_countries: [],
     allow_only: false,
     use_header_fallback: true,
+    deny_action: 'block',
   }
 }
 

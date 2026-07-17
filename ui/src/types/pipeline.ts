@@ -56,6 +56,7 @@ export const DEFAULT_MODULE_CONFIG: Record<string, string> = {
     allow_countries: [],
     allow_only: false,
     use_header_fallback: true,
+    deny_action: 'block',
   }),
   trusted_bots: JSON.stringify({
     enabled: true,

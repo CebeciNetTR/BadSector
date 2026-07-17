@@ -16,6 +16,7 @@ Country lookup via **GeoLite2-Country.mmdb** (worker auto-download). Optional he
 | `allow_only` | Only listed countries pass |
 | `use_header_fallback` | Use `CF-IPCountry` / `X-Country-Code` if lookup fails |
 | `fail_open` | Continue if country unknown |
+| `deny_action` | `block` (403) \| `drop` (444) \| `challenge` (JS PoW). Default `block`. |
 
 Sets `ctx.vars.country` and `ctx.enrich.geo`. See [GEOIP.md](GEOIP.md).
 
@@ -107,7 +108,12 @@ teyididir.
 | `pass_ttl` | 3600 | `bs_pass` geçerlilik (s) |
 | `pass_cookie` / `pow_cookie` | `bs_pass` / `bs_pow` | Cookie adları |
 | `ban_threshold` / `ban_ttl` | **5** / 86400 | Çözümsüz challenge banı (60s pencere) |
-| `template` | `""` | Özel challenge HTML/CSS (boş = yerleşik varsayılan) |
+| `template` | `""` | Site özel HTML (boş → global dosya → yerleşik varsayılan) |
+
+**Ortak HTML (tüm siteler, GitHub'da görünmez):** Sunucuda
+`data/challenge/template.html` oluşturun (compose → `/etc/badsector/challenge/template.html`).
+Site `template` boşken engine bu dosyayı kullanır. `template.html` gitignore'dadır;
+yalnızca `template.html.example` + README repoda. Bkz. `data/challenge/README.md`.
 
 **Statik asset muafiyeti (önemli):** `favicon.ico`, `*.css`, `*.js`, `*.png` vb. uzantılar
 ve varsayılan exclude listesi **challenge almaz** ve ban sayacına yazılmaz. Aksi halde
@@ -118,12 +124,11 @@ tek sayfa yükü (HTML + favicon) sayacı doldurup meşru IP'yi banlardı.
 `bs:ban:<ip> = "js_challenge"` (watcher ban'ından ayırt etmek için).
 
 **Özel challenge sayfası (`template`):** Panelden (Edge Security → Challenges → JS
-Challenge) tam HTML/CSS yazılabilir. Görünür markup tamamen sizindir; PoW çözücü
-`<script>` engine tarafından her zaman otomatik enjekte edilir (`</body>` varsa
-öncesine, yoksa sona) — yani şablonu bozsanız bile doğrulama çalışır. Şablon
-`string.format` ile değil düz string olarak işlenir, bu yüzden CSS'teki `%`
-işaretlerini kaçırmanız gerekmez. Metinde `{{difficulty}}` yer tutucusu geçerli
-zorluk sayısıyla değiştirilir.
+Challenge) tam HTML/CSS yazılabilir — site bazında global dosyayı ezer. Görünür markup
+tamamen sizindir; PoW çözücü `<script>` engine tarafından her zaman otomatik enjekte
+edilir (`</body>` varsa öncesine, yoksa sona). Şablon `string.format` ile değil düz
+string olarak işlenir, CSS'teki `%` kaçırmanız gerekmez. `{{difficulty}}` yer tutucusu
+geçerli zorluk sayısıyla değiştirilir.
 
 **Env (engine):** `BADSECTOR_CHALLENGE_SECRET` (üretimde mutlaka değiştirin; tüm
 worker'lar aynı sırrı paylaşmalı), `BADSECTOR_POW_DIFFICULTY[_ATTACK]`,

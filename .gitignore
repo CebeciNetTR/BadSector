@@ -37,6 +37,10 @@ data/*
 !data/geoip/.gitkeep
 !data/certs/
 !data/certs/.gitkeep
+!data/challenge/
+!data/challenge/.gitkeep
+!data/challenge/template.html.example
+!data/challenge/README.md
 data/geoip/*.mmdb
 data/geoip/*.tar.gz
 data/certs/*
@@ -52,6 +56,7 @@ data/certs/*.pem
 data/certs/*.crt
 data/certs/*.key
 data/certs/temp.*
+data/challenge/template.html
 *.db
 *.sqlite
 *.sqlite3

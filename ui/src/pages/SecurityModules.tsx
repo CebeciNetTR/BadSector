@@ -244,6 +244,23 @@ export default function SecurityModules() {
                   Header fallback (CF-IPCountry)
                 </label>
                 <label>
+                  Reddetme eylemi (allow-list dışı / block list)
+                  <select
+                    value={geoip.deny_action || 'block'}
+                    onChange={(e) => {
+                      setGeoip({
+                        ...geoip,
+                        deny_action: e.target.value as 'block' | 'drop' | 'challenge',
+                      })
+                      markDirty()
+                    }}
+                  >
+                    <option value="block">403 Block</option>
+                    <option value="drop">444 Silent drop</option>
+                    <option value="challenge">JS Challenge (PoW)</option>
+                  </select>
+                </label>
+                <label>
                   Engellenen ülkeler (ISO, virgülle)
                   <input
                     value={geoip.block_countries.join(', ')}
@@ -444,10 +461,11 @@ export default function SecurityModules() {
                     </div>
                   </div>
                   <p style={{ color: 'var(--muted)', fontSize: '0.8rem', margin: '0.5rem 0 0.75rem' }}>
-                    Boş bırakırsan yerleşik varsayılan sayfa gösterilir. PoW çözücü
-                    {' '}<code>&lt;script&gt;</code> her zaman otomatik eklenir (senin yazman gerekmez);
-                    HTML'inde <code>&lt;/body&gt;</code> varsa hemen öncesine, yoksa sona enjekte edilir.
-                    İstersen metinde <code>{'{{difficulty}}'}</code> yer tutucusunu kullanabilirsin.
+                    Boş bırakırsan önce sunucudaki global dosya
+                    {' '}<code>data/challenge/template.html</code> (git&apos;te yok), yoksa yerleşik sayfa kullanılır.
+                    PoW çözücü <code>&lt;script&gt;</code> her zaman otomatik eklenir;
+                    HTML&apos;inde <code>&lt;/body&gt;</code> varsa hemen öncesine enjekte edilir.
+                    İstersen <code>{'{{difficulty}}'}</code> yer tutucusunu kullanabilirsin.
                   </p>
                   <textarea
                     rows={14}

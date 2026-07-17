@@ -25,6 +25,8 @@ All notable changes to BadSector are documented here.
 
 ### Added
 
+- **GeoIP `deny_action`** — Allow-list dışı / block list için `block` (403), `drop` (444), `challenge` (JS PoW). UI + engine.
+- **Ortak JS challenge HTML** — Site template boşken `data/challenge/template.html` (gitignore; GitHub'da yok). Compose mount + `BADSECTOR_JS_CHALLENGE_TEMPLATE_PATH`.
 - **İmzalı Proof-of-Work JS challenge** — Taklit edilebilen eski "cookie=1" mantığı, stateless HMAC-SHA256 imzalı PoW ile değiştirildi (`engine/lib/badsector/crypto.lua`, `pow.lua`). İstemci senkron SHA-256 ile çözer; sunucu 1 hash ile doğrular ve imzalı `bs_pass` gecis cookie'si verir (hızlı yol, ~µs). Zorluk attack mode'da otomatik yükselir. HAProxy edge fast-path: `bs_pass` taşıyanlar attack-429'undan muaf. `BADSECTOR_CHALLENGE_SECRET` env (üretimde değiştirin). ([SECURITY_MODULES.md](docs/SECURITY_MODULES.md))
 - **Trusted bot IP auto-sync** — Worker günlük olarak Googlebot/Bingbot resmi IP aralıklarını indirir (`internal/bots`), engine bunları CIDR (IPv4 kesin + IPv6) eşleştirmesiyle doğrular. `GET /bots/status`, `./data/bots` mount, `scripts/download-bots.sh`. Statik hardcoded prefix'ler artık taze tutuluyor ve saldırı modunda da (DNS'siz) kullanılıyor.
 - **Edge security modules UI + API** — ASN, header validation, burst detection, JS/cookie challenge ([SECURITY_MODULES.md](docs/SECURITY_MODULES.md))

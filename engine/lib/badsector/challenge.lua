@@ -1,9 +1,11 @@
 --[[
   Challenge issuer — JS, cookie, and captcha challenges.
 
-  JS challenge = imzali Proof-of-Work. Gorunur HTML/CSS site config'inden gelir
-  (custom template); PoW cozucu <script> her zaman engine tarafindan enjekte
-  edilir, boylece kullanici sablonu bozsa bile dogrulama calisir.
+  JS challenge = imzali Proof-of-Work. Gorunur HTML oncelik:
+    1) site config `template`
+    2) sunucu global dosya (BADSECTOR_JS_CHALLENGE_TEMPLATE_PATH)
+    3) yerlesik default_template
+  PoW cozucu <script> her zaman engine tarafindan enjekte edilir.
 ]]
 
 local util = require("badsector.util")
@@ -64,6 +66,46 @@ _M.default_template = [==[<!DOCTYPE html>
     </div>
 </body>
 </html>]==]
+
+-- Sunucu-yanı global sablon (tum siteler). Git'e girmez; volume mount.
+-- Path: BADSECTOR_JS_CHALLENGE_TEMPLATE_PATH veya /etc/badsector/challenge/template.html
+local global_tpl = { body = nil, loaded_at = 0 }
+
+local function read_file(path)
+    local f = io.open(path, "rb")
+    if not f then
+        return nil
+    end
+    local data = f:read("*a")
+    f:close()
+    if type(data) == "string" and #data > 0 then
+        return data
+    end
+    return nil
+end
+
+--- Site template > global dosya > yerlesik default.
+---@param site_template string|nil
+---@return string
+function _M.resolve_template(site_template)
+    if type(site_template) == "string" and site_template ~= "" then
+        return site_template
+    end
+    local now = ngx.now()
+    -- Dosya degisince ~30s icinde yeni HTML yuklenir (worker restart gerekmez).
+    if not global_tpl.body or (now - global_tpl.loaded_at) > 30 then
+        local path = os.getenv("BADSECTOR_JS_CHALLENGE_TEMPLATE_PATH")
+        if not path or path == "" then
+            path = "/etc/badsector/challenge/template.html"
+        end
+        global_tpl.body = read_file(path)
+        global_tpl.loaded_at = now
+    end
+    if global_tpl.body then
+        return global_tpl.body
+    end
+    return _M.default_template
+end
 
 --- Issue a challenge to the client.
 ---@param ctx table RequestContext
@@ -211,10 +253,7 @@ end
 ---@param template string|nil  Site config'inden gelen ozel HTML (bos ise varsayilan)
 ---@return string
 function _M.js_challenge_page(token, difficulty, pow_cookie, template)
-    local body = template
-    if type(body) ~= "string" or body == "" then
-        body = _M.default_template
-    end
+    local body = _M.resolve_template(template)
     -- Opsiyonel yer tutucu: {{difficulty}} -> sayi.
     body = body:gsub("{{difficulty}}", function()
         return tostring(tonumber(difficulty) or 4)

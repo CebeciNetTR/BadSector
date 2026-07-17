@@ -22,6 +22,7 @@ func DefaultGeoipConfig() map[string]interface{} {
 		"allow_countries":     []interface{}{},
 		"allow_only":          false,
 		"use_header_fallback": true,
+		"deny_action":         "block", // block | drop | challenge
 	}
 }
 

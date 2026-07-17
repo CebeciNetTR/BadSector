@@ -111,7 +111,7 @@ func defaultModuleConfig(module string) string {
 		"policies":          `{"rules":[]}`,
 		"rate_limiter":      `{"use_redis":true,"fail_mode":"open","redis":{"host":"redis","port":6379,"timeout":100},"rules":[]}`,
 		"reverse_proxy":     string(proxyCfg),
-		"geoip":             `{"database_path":"/etc/badsector/geoip/GeoLite2-Country.mmdb","fail_open":true,"block_countries":[],"allow_countries":[],"allow_only":false,"use_header_fallback":true}`,
+		"geoip":             `{"database_path":"/etc/badsector/geoip/GeoLite2-Country.mmdb","fail_open":true,"block_countries":[],"allow_countries":[],"allow_only":false,"use_header_fallback":true,"deny_action":"block"}`,
 		"trusted_bots":      `{"enabled":true,"mark_trusted":true,"verify_ip":true}`,
 		"ip_reputation":     `{"enabled":true,"block_ips":[],"block_cidrs":[],"use_redis_feed":false,"fail_open":true}`,
 		"asn":               `{"enabled":true,"database_path":"/etc/badsector/geoip/GeoLite2-ASN.mmdb","block_asns":[],"allow_asns":[],"allow_only":false,"ip_map":{},"fail_open":true}`,

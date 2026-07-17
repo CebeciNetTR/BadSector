@@ -71,6 +71,7 @@ func DefaultPipelineStages(siteID string) []PipelineStage {
 		"allow_countries":     []interface{}{},
 		"allow_only":          false,
 		"use_header_fallback": true,
+		"deny_action":         "block",
 	})
 
 	customRulesConfig, _ := json.Marshal(map[string]interface{}{

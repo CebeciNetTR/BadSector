@@ -1,9 +1,8 @@
 local geo_lookup = require("badsector.geo_lookup")
 local decision = require("badsector.decision")
-local util = require("badsector.util")
 local M = {
     name = "geoip",
-    version = "1.0.0",
+    version = "1.1.0",
 }
 
 local cfg = {
@@ -13,9 +12,18 @@ local cfg = {
     allow_countries = {},
     allow_only = false,
     use_header_fallback = true,
+    -- block (403) | drop (444 silent) | challenge (JS PoW)
+    deny_action = "block",
 }
 
 local country_db_ok = false
+
+local function normalize_deny_action(v)
+    if v == "drop" or v == "challenge" or v == "block" then
+        return v
+    end
+    return "block"
+end
 
 function M.reload(config)
     config = config or {}
@@ -25,6 +33,7 @@ function M.reload(config)
     cfg.allow_countries = config.allow_countries or {}
     cfg.allow_only = config.allow_only == true
     cfg.use_header_fallback = config.use_header_fallback ~= false
+    cfg.deny_action = normalize_deny_action(config.deny_action)
 
     country_db_ok = false
     local _, status, err = geo_lookup.lookup_country("8.8.8.8", cfg.database_path)
@@ -78,6 +87,29 @@ local function header_fallback(headers)
     return nil
 end
 
+--- Apply configured deny_action for blocked / not-allowed countries.
+local function deny(ctx, reason)
+    local action = cfg.deny_action or "block"
+    if action == "drop" then
+        ctx:trace("geoip", decision.RETURN_444, reason)
+        return decision.RETURN_444
+    end
+    if action == "challenge" then
+        local pow = require("badsector.pow")
+        local diff = pow.difficulty({})
+        local token = pow.make_challenge(ctx.request.remote_addr, diff)
+        ctx:trace("geoip", decision.CHALLENGE, reason, { deny_action = "challenge", difficulty = diff })
+        return decision.challenge("js", {
+            token = token,
+            difficulty = diff,
+            pow_cookie = "bs_pow",
+            template = "", -- site/global resolve in challenge.lua
+        })
+    end
+    ctx:trace("geoip", decision.BLOCK, reason, { deny_action = "block" })
+    return decision.block(403, "Access denied")
+end
+
 function M.run(ctx, config)
     if config then
         M.reload(config)
@@ -97,8 +129,7 @@ function M.run(ctx, config)
 
     if not geo or not geo.country then
         if not cfg.fail_open then
-            ctx:trace("geoip", decision.BLOCK, "Country unknown")
-            return decision.block(403, "Access denied")
+            return deny(ctx, "Country unknown")
         end
         local detail = "Geo lookup unavailable"
         if lookup_err then
@@ -116,13 +147,11 @@ function M.run(ctx, config)
     ctx:trace("geoip", decision.CONTINUE, "Country: " .. geo.country, { source = geo.source })
 
     if cfg.allow_only and not country_in_list(geo.country, cfg.allow_countries) then
-        ctx:trace("geoip", decision.BLOCK, "Country not allowed: " .. geo.country)
-        return decision.block(403, "Access denied")
+        return deny(ctx, "Country not allowed: " .. geo.country)
     end
 
     if country_in_list(geo.country, cfg.block_countries) then
-        ctx:trace("geoip", decision.BLOCK, "Country blocked: " .. geo.country)
-        return decision.block(403, "Access denied")
+        return deny(ctx, "Country blocked: " .. geo.country)
     end
 
     return decision.CONTINUE

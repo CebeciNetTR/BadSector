@@ -132,10 +132,13 @@ services:
       # PoW zorlugu (basta hex sifir): normal / attack mode.
       BADSECTOR_POW_DIFFICULTY: "4"
       BADSECTOR_POW_DIFFICULTY_ATTACK: "5"
+      # Tum siteler icin ortak challenge HTML (site template bosken). Git'e girmeyen host dosyasi.
+      BADSECTOR_JS_CHALLENGE_TEMPLATE_PATH: /etc/badsector/challenge/template.html
     volumes:
       - runtime_config:/etc/badsector/runtime:ro
       - ./data/geoip:/etc/badsector/geoip:ro
       - ./data/bots:/etc/badsector/bots:ro
+      - ./data/challenge:/etc/badsector/challenge:ro
       - ./engine/coraza/rules:/etc/badsector/coraza/rules:ro
     ulimits:
       nofile:
