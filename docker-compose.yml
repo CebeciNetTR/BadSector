@@ -2,9 +2,8 @@ services:
   redis:
     image: redis:7-alpine
     restart: unless-stopped
-    # 8GB kutuda Redis'in sinirsiz buyumesini engelle. Veriler (rate sayaclari,
-    # ban listesi, PoW token, trace) TTL'li oldugu icin allkeys-lru guvenli.
-    command: ["redis-server", "--maxmemory", "512mb", "--maxmemory-policy", "allkeys-lru", "--save", "", "--appendonly", "no"]
+    # 8c/24GB (OVH): rate sayaclari + ban + PoW/trace TTL'li; allkeys-lru guvenli.
+    command: ["redis-server", "--maxmemory", "2gb", "--maxmemory-policy", "allkeys-lru", "--save", "", "--appendonly", "no"]
     ports:
       # SADECE localhost — Redis internete ACIK OLMAMALI (sifre yok; disaridan
       # FLUSHALL/CONFIG suistimali + RCE riski). Watcher host'tan 127.0.0.1:6379
@@ -31,19 +30,19 @@ services:
       POSTGRES_USER: badsector
       POSTGRES_PASSWORD: badsector
       POSTGRES_DB: badsector
-    # 8GB kutu icin olculu ayar (config-agirlikli, dusuk yazma trafigi).
+    # 8c/24GB: config-agirlikli API; yazma trafigi dusuk.
     command:
       - postgres
       - -c
-      - shared_buffers=192MB
+      - shared_buffers=1GB
       - -c
-      - effective_cache_size=768MB
+      - effective_cache_size=4GB
       - -c
-      - work_mem=8MB
+      - work_mem=16MB
       - -c
-      - maintenance_work_mem=64MB
+      - maintenance_work_mem=256MB
       - -c
-      - max_connections=50
+      - max_connections=100
     ports:
       # SADECE localhost — Postgres internete acik olmamali.
       - "127.0.0.1:5432:5432"
@@ -206,9 +205,9 @@ services:
     environment:
       BADSECTOR_REDIS_HOST: "127.0.0.1"
       BADSECTOR_REDIS_PORT: "6379"
-      BAN_THRESHOLD: "1000"       # 1000 hit = iptables ban
+      BAN_THRESHOLD: "1000"       # kumulatif hit (gece sifirlanir) = iptables ban
       CHECK_INTERVAL: "30"        # 30 saniyede bir kontrol
-      BAN_TTL: "86400"            # 24 saat ban
+      BAN_TTL: "7200"             # 2 saat ban (yanlis ban / SSH kilidi riskini dusurur)
     depends_on:
       - redis
     logging:

@@ -52,9 +52,26 @@ git push -u origin main
 Sunucu gereksinimleri:
 - Ubuntu 22.04+ / Debian 12+ (**KVM** önerilir — watcher iptables/ipset kullanır)
 - Root veya sudo
-- Önerilen: 4+ vCPU / 8 GB RAM (düşük-orta edge; büyük botnet için CDN/scrubbing ekleyin)
+- **Hedef (OVH edge):** 8 vCPU / 24 GB RAM / yüksek bant genişliği — compose + `haproxy-live` buna göre ayarlı
+- Minimum: 4+ vCPU / 8 GB RAM (düşük-orta; büyük botnet için üst katman gerekir)
 - Portlar: **80**, **443** (public); admin UI (`BADSECTOR_UI_PORT`, varsayılan **3000**); **9080** (dev edge)
 - Redis/Postgres/API compose'ta yalnızca **127.0.0.1** üzerinde dinler (internete açmayın)
+
+### OVH / 8c·24GB — host sysctl (önerilen)
+
+```bash
+cat <<'EOF' | sudo tee /etc/sysctl.d/99-badsector.conf
+net.core.somaxconn = 65535
+net.ipv4.tcp_max_syn_backlog = 65535
+net.ipv4.ip_local_port_range = 1024 65535
+net.ipv4.tcp_tw_reuse = 1
+net.ipv4.tcp_fin_timeout = 15
+fs.file-max = 2097152
+EOF
+sudo sysctl --system
+```
+
+Compose varsayılanları (24GB): Redis `maxmemory 2gb`, Postgres `shared_buffers=1GB`, HAProxy `nbthread 8` / `maxconn 100000`, watcher `BAN_TTL=7200`.
 
 ### Yöntem A — clone + script
 

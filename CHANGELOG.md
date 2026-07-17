@@ -19,7 +19,7 @@ All notable changes to BadSector are documented here.
 
 ### Changed
 
-- **Donanım varsayımları (8GB / 4 thread)** — Redis `maxmemory 512mb` + LRU; Postgres ölçülü shared_buffers; HAProxy `maxconn 40000`.
+- **Donanım varsayımları → 8c / 24GB (OVH edge)** — Redis `maxmemory 2gb`; Postgres `shared_buffers=1GB` / `effective_cache_size=4GB`; HAProxy `nbthread 8`, `maxconn 100000`, stick-table 2m; engine `worker_connections 16384` + büyütülmüş lua_shared_dict; watcher `BAN_TTL=7200`.
 - **Admin UI portu** — `.env` ile `BADSECTOR_UI_PORT` (varsayılan 3000).
 - **JS challenge** — `ban_threshold` 3→5; ban Redis değeri `js_challenge` (kaynak ayrımı).
 
