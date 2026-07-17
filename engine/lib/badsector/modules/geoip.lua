@@ -1,8 +1,9 @@
 local geo_lookup = require("badsector.geo_lookup")
 local decision = require("badsector.decision")
+local util = require("badsector.util")
 local M = {
     name = "geoip",
-    version = "1.1.0",
+    version = "1.1.1",
 }
 
 local cfg = {
@@ -15,6 +16,10 @@ local cfg = {
     -- block (403) | drop (444 silent) | challenge (JS PoW)
     deny_action = "block",
 }
+
+local PASS_COOKIE = "bs_pass"
+local POW_COOKIE = "bs_pow"
+local PASS_TTL = 3600
 
 local country_db_ok = false
 
@@ -87,6 +92,52 @@ local function header_fallback(headers)
     return nil
 end
 
+local function get_cookie(headers, name)
+    local c = util.header_get(headers or {}, "Cookie")
+    if not c then
+        return nil
+    end
+    for kv in c:gmatch("[^;]+") do
+        local k, v = kv:match("^%s*([^=]+)=(.*)$")
+        if k == name then
+            return v
+        end
+    end
+    return nil
+end
+
+--- deny_action=challenge: gecerli bs_pass / yeni cozum varsa allow-list'i atla.
+local function try_challenge_pass(ctx)
+    local pow = require("badsector.pow")
+    local headers = ctx.request.headers
+    local ip = ctx.request.remote_addr
+    local ua = util.header_get(headers, "User-Agent") or ""
+
+    local pass_val = get_cookie(headers, PASS_COOKIE)
+    if pass_val and pow.verify_pass(ip, ua, pass_val) then
+        ctx:trace("geoip", decision.CONTINUE, "GeoIP challenge pass gecerli")
+        return decision.CONTINUE
+    end
+
+    local sol = get_cookie(headers, POW_COOKIE)
+    if sol then
+        local ok = pow.verify_solution(ip, sol)
+        if ok then
+            local token = pow.make_pass(ip, ua, PASS_TTL)
+            local dest = ngx.var.request_uri or ctx.request.path or "/"
+            ctx:trace("geoip", decision.CONTINUE, "GeoIP PoW cozuldu — pass veriliyor")
+            return decision.redirect(dest, 302, {
+                ["Cache-Control"] = "no-store",
+                ["Set-Cookie"] = {
+                    PASS_COOKIE .. "=" .. token .. "; Path=/; Max-Age=" .. PASS_TTL .. "; HttpOnly; SameSite=Lax",
+                    POW_COOKIE .. "=; Path=/; Max-Age=0",
+                },
+            })
+        end
+    end
+    return nil
+end
+
 --- Apply configured deny_action for blocked / not-allowed countries.
 local function deny(ctx, reason)
     local action = cfg.deny_action or "block"
@@ -95,6 +146,10 @@ local function deny(ctx, reason)
         return decision.RETURN_444
     end
     if action == "challenge" then
+        local passed = try_challenge_pass(ctx)
+        if passed then
+            return passed
+        end
         local pow = require("badsector.pow")
         local diff = pow.difficulty({})
         local token = pow.make_challenge(ctx.request.remote_addr, diff)
@@ -102,8 +157,8 @@ local function deny(ctx, reason)
         return decision.challenge("js", {
             token = token,
             difficulty = diff,
-            pow_cookie = "bs_pow",
-            template = "", -- site/global resolve in challenge.lua
+            pow_cookie = POW_COOKIE,
+            template = "",
         })
     end
     ctx:trace("geoip", decision.BLOCK, reason, { deny_action = "block" })

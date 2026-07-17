@@ -151,7 +151,9 @@ function _M.issue(ctx, challenge_type, opts)
 end
 
 --- PoW cozucu <script> — token/difficulty/cookie guvenli sekilde gomulur.
---- Senkron SHA-256 (public domain, geraintluff), parcali dongu (UI donmaz).
+--- Senkron SHA-256 (geraintluff tabanli): IV her cagrida kopyalanir.
+--- Eski snipet h'yi fonksiyon uzerinde cache'leyip bozuyordu → 2. hash yanlis,
+--- sonsuz spinner veya sunucunun reddettigi "cozüm".
 --- string.format KULLANILMAZ; degiskenler cjson ile JS literal olarak gomulur.
 ---@param token string
 ---@param difficulty number
@@ -166,27 +168,34 @@ local function pow_script(token, difficulty, pow_cookie)
             function rr(v,a){return (v>>>a)|(v<<(32-a));}
             var mp=Math.pow, mw=mp(2,32), res='';
             var words=[], bl=ascii.length*8;
-            var h=sha256.h=sha256.h||[], k=sha256.k=sha256.k||[];
-            var pc=k.length, comp={};
-            for(var c=2; pc<64; c++){
-                if(!comp[c]){
-                    for(var i=0;i<313;i+=c){comp[i]=c;}
-                    h[pc]=(mp(c,0.5)*mw)|0;
-                    k[pc++]=(mp(c,1/3)*mw)|0;
+            var k=sha256.k, iv=sha256.iv;
+            if(!k){
+                k=[]; iv=[];
+                var pc=0, comp={};
+                for(var c=2; pc<64; c++){
+                    if(!comp[c]){
+                        for(var i=0;i<313;i+=c){comp[i]=c;}
+                        iv[pc]=(mp(c,0.5)*mw)|0;
+                        k[pc++]=(mp(c,1/3)*mw)|0;
+                    }
                 }
+                sha256.k=k;
+                sha256.iv=iv.slice(0,8);
+                iv=sha256.iv;
             }
+            var h=iv.slice(0);
             ascii+='\x80';
             while(ascii.length%64-56) ascii+='\x00';
             for(var i=0;i<ascii.length;i++){
                 var j=ascii.charCodeAt(i);
-                if(j>>8) return;
+                if(j>>8) return '';
                 words[i>>2]|=j<<((3-i)%4)*8;
             }
             words[words.length]=(bl/mw)|0;
             words[words.length]=bl;
             for(var j=0;j<words.length;){
-                var w=words.slice(j,j+=16), oh=h;
-                h=h.slice(0,8);
+                var w=words.slice(j,j+=16), oh=h.slice(0);
+                h=h.slice(0);
                 for(var i=0;i<64;i++){
                     var w15=w[i-15], w2=w[i-2];
                     var a=h[0], e=h[4];
@@ -210,7 +219,7 @@ local function pow_script(token, difficulty, pow_cookie)
             for(var i=0;i<8;i++){
                 for(var j=3;j+1;j--){
                     var b=(h[i]>>(j*8))&255;
-                    res+=((b<16)?0:'')+b.toString(16);
+                    res+=((b<16)?'0':'')+b.toString(16);
                 }
             }
             return res;
@@ -218,7 +227,7 @@ local function pow_script(token, difficulty, pow_cookie)
         var PREFIX=new Array(DIFF+1).join('0');
         var nonce=0;
         function step(){
-            var end=nonce+2000;
+            var end=nonce+2500;
             for(; nonce<end; nonce++){
                 if(sha256(TOKEN+':'+nonce).slice(0,DIFF)===PREFIX){
                     document.cookie=COOKIE+'='+TOKEN+':'+nonce+';path=/;max-age=300;SameSite=Lax';
