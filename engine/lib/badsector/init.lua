@@ -165,8 +165,12 @@ function _M.handle()
     local rip = client_ip.from_request()
     ngx.var.badsector_client_ip = rip or ""
 
+    local trusted_ips = require("badsector.trusted_ips")
+    local is_trusted = trusted_ips.is(rip)
+
     -- Ban check: shared-dict negatif cache (istek basina Redis GET yerine ~5s'de bir).
-    if is_banned_cached(rip) then
+    -- Trusted IP asla ban drop almaz (Redis'te kalsa bile).
+    if not is_trusted and is_banned_cached(rip) then
         require("badsector.metrics").incr("BAN_DROP")
         return executor.drop()
     end

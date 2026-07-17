@@ -24,6 +24,18 @@ local POLL_MS   = tonumber(os.getenv("BADSECTOR_BAN_POLL_MS")) or 2000
 local BAN_CAP   = tonumber(os.getenv("BADSECTOR_BAN_CAP")) or 200000
 local HITS_CAP  = tonumber(os.getenv("BADSECTOR_HITS_CAP")) or 200000
 
+-- Global trusted IPs (BADSECTOR_TRUSTED_IPS=ip1,ip2 — kodda sabit yok)
+local _trusted = {}
+do
+    local raw = os.getenv("BADSECTOR_TRUSTED_IPS") or ""
+    for part in raw:gmatch("[^,]+") do
+        local ip = part:match("^%s*(.-)%s*$")
+        if ip and ip ~= "" then
+            _trusted[ip] = true
+        end
+    end
+end
+
 -- Global durum (lua-load tek Lua state + kilit kullandigi icin thread'ler arasi guvenli)
 local _attack_mode = false
 local _hits = {}   -- ip -> biriken sayac (task flush eder)
@@ -215,7 +227,7 @@ end)
 -- Istek basina action: SADECE bellek erisimi (socket yok, yield yok).
 core.register_action("ban_check", { "http-req" }, function(txn)
     local ip = txn.f:src()
-    if ip and ip ~= "" then
+    if ip and ip ~= "" and not _trusted[ip] then
         local cur = _hits[ip]
         if cur then
             _hits[ip] = cur + 1

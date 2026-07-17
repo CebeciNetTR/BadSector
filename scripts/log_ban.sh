@@ -5,6 +5,18 @@
 
 IPSET_NAME="bs_banned"
 BAN_TTL=86400  # 24 hours
+TRUSTED_IPS="${BADSECTOR_TRUSTED_IPS:-}"
+
+is_trusted() {
+    local ip="$1" part
+    IFS=',' read -ra _parts <<< "$TRUSTED_IPS"
+    for part in "${_parts[@]}"; do
+        part="${part#"${part%%[![:space:]]*}"}"
+        part="${part%"${part##*[![:space:]]}"}"
+        [[ "$part" == "$ip" ]] && return 0
+    done
+    return 1
+}
 
 # Ensure ipset exists
 if ! ipset list "$IPSET_NAME" &>/dev/null; then
@@ -39,6 +51,10 @@ docker logs --tail 2000 "$HAPROXY_CONTAINER" 2>/dev/null | grep -E "PR--|<BADREQ
     }
 }' | sort | uniq -c | while read count ip; do
     if [ "$count" -gt 30 ]; then
+        if is_trusted "$ip"; then
+            echo "[$(date '+%Y-%m-%d %H:%M:%S')] SKIP trusted: $ip"
+            continue
+        fi
         if ipset add "$IPSET_NAME" "$ip" timeout $BAN_TTL 2>/dev/null; then
             # Sync with Redis for OpenResty consistency
             docker exec -d $(docker ps --filter name=redis --format "{{.Names}}" | head -n 1) redis-cli SETEX "bs:ban:$ip" "$BAN_TTL" "1"

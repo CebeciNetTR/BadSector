@@ -235,10 +235,16 @@ Watcher ban'ı host `iptables` + `ipset bs_banned` yazar — **SSH dahil tüm po
 Kendinizi kilitlerseniz: farklı IP/VPN, sağlayıcı KVM/reboot, sonra:
 
 ```bash
+# Tum ban'lari bosalt (Redis + ipset + hit sayaci)
+sudo ./scripts/clear-bans.sh
+
+# veya manuel
 sudo ipset flush bs_banned
 sudo iptables -D INPUT -m set --match-set bs_banned src -j DROP 2>/dev/null
 cd /opt/badsector && docker compose stop watcher   # geçici
 ```
+
+**Trusted IP:** `.env` içinde `BADSECTOR_TRUSTED_IPS=x.x.x.x` — iptables ACCEPT, watcher asla banlamaz, engine GeoIP/challenge/ban muaf, HAProxy hit saymaz. Boş bırakılırsa kimse muaf değildir.
 
 ---
 

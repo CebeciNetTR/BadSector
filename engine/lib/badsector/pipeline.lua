@@ -40,6 +40,12 @@ end
 ---@return table ctx RequestContext with final decision
 function _M.run(site)
     local ctx = RequestContext.new(site)
+    local trusted_ips = require("badsector.trusted_ips")
+    if trusted_ips.is(ctx.request.remote_addr) then
+        ctx:trace("trusted_ips", decision.ALLOW, "global trusted IP")
+        ctx:set_decision(decision.ALLOW)
+        return ctx
+    end
     local pipeline = sort_pipeline(site.pipeline or {})
 
     for _, stage in ipairs(pipeline) do

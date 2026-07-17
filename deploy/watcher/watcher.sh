@@ -14,11 +14,42 @@ BAN_THRESHOLD="${BAN_THRESHOLD:-1000}"      # Bu kadar hit = ban
 CHECK_INTERVAL="${CHECK_INTERVAL:-30}"      # Saniyede bir kontrol
 BAN_TTL="${BAN_TTL:-86400}"                 # Ban suresi (saniye) - varsayilan 24 saat
 IPSET_NAME="bs_banned"
+# Virgul ile: asla banlanmaz + iptables ACCEPT. Bos = kimse muaf degil.
+TRUSTED_IPS="${BADSECTOR_TRUSTED_IPS:-}"
 
 REDIS="redis-cli -h $REDIS_HOST -p $REDIS_PORT"
 
 log() {
     echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] $1"
+}
+
+is_trusted() {
+    local ip="$1"
+    local part
+    IFS=',' read -ra _parts <<< "$TRUSTED_IPS"
+    for part in "${_parts[@]}"; do
+        part="${part#"${part%%[![:space:]]*}"}"
+        part="${part%"${part##*[![:space:]]}"}"
+        [[ "$part" == "$ip" ]] && return 0
+    done
+    return 1
+}
+
+ensure_trusted_accept() {
+    local part
+    IFS=',' read -ra _parts <<< "$TRUSTED_IPS"
+    for part in "${_parts[@]}"; do
+        part="${part#"${part%%[![:space:]]*}"}"
+        part="${part%"${part##*[![:space:]]}"}"
+        [[ -z "$part" ]] && continue
+        # ACCEPT en uste — ipset DROP'tan once
+        if ! iptables -C INPUT -s "$part" -j ACCEPT 2>/dev/null; then
+            iptables -I INPUT 1 -s "$part" -j ACCEPT
+            log "iptables ACCEPT (trusted): $part"
+        fi
+        ipset del "$IPSET_NAME" "$part" 2>/dev/null || true
+        $REDIS DEL "bs:ban:$part" > /dev/null 2>&1 || true
+    done
 }
 
 setup_ipset() {
@@ -34,10 +65,16 @@ setup_ipset() {
         iptables -I INPUT -m set --match-set "$IPSET_NAME" src -j DROP
         log "iptables kurali eklendi: INPUT -m set --match-set $IPSET_NAME src -j DROP"
     fi
+
+    ensure_trusted_accept
 }
 
 ban_ip() {
     local ip="$1"
+    if is_trusted "$ip"; then
+        log "SKIP ban (trusted): $ip"
+        return
+    fi
     # iptables ipset'e ekle (zaten varsa hata verme)
     if ipset add "$IPSET_NAME" "$ip" timeout "$BAN_TTL" 2>/dev/null; then
         # Redis ban listesine de ekle (engine katmani icin)
@@ -56,6 +93,8 @@ daily_reset() {
     # ipset'i temizle (yeni olustur)
     ipset flush "$IPSET_NAME" 2>/dev/null && log "ipset '$IPSET_NAME' temizlendi"
 
+    ensure_trusted_accept
+
     log "=== Gunluk temizlik tamamlandi ==="
 }
 
@@ -64,6 +103,7 @@ last_reset_day=""
 
 log "BadSector IP Watcher baslatildi"
 log "Esik: $BAN_THRESHOLD hit | Kontrol suresi: ${CHECK_INTERVAL}s | Ban TTL: ${BAN_TTL}s"
+log "Trusted IPs: $TRUSTED_IPS"
 
 setup_ipset
 

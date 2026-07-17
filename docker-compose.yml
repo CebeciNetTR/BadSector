@@ -134,6 +134,8 @@ services:
       BADSECTOR_POW_DIFFICULTY_ATTACK: "5"
       # Tum siteler icin ortak challenge HTML (site template bosken). Git'e girmeyen host dosyasi.
       BADSECTOR_JS_CHALLENGE_TEMPLATE_PATH: /etc/badsector/challenge/template.html
+      # Virgul ile yonetim IP'leri — ban/GeoIP/challenge muaf (.env: BADSECTOR_TRUSTED_IPS)
+      BADSECTOR_TRUSTED_IPS: ${BADSECTOR_TRUSTED_IPS:-}
     volumes:
       - runtime_config:/etc/badsector/runtime:ro
       - ./data/geoip:/etc/badsector/geoip:ro
@@ -174,6 +176,7 @@ services:
       HAPROXY_CONFIG: ${BADSECTOR_HAPROXY_CONFIG:-dev}
       BADSECTOR_REDIS_HOST: redis
       BADSECTOR_REDIS_PORT: "6379"
+      BADSECTOR_TRUSTED_IPS: ${BADSECTOR_TRUSTED_IPS:-}
     ports:
       - "9080:9080"
       - "80:80"
@@ -211,6 +214,7 @@ services:
       BAN_THRESHOLD: "1000"       # kumulatif hit (gece sifirlanir) = iptables ban
       CHECK_INTERVAL: "30"        # 30 saniyede bir kontrol
       BAN_TTL: "7200"             # 2 saat ban (yanlis ban / SSH kilidi riskini dusurur)
+      BADSECTOR_TRUSTED_IPS: ${BADSECTOR_TRUSTED_IPS:-}
     depends_on:
       - redis
     logging:
