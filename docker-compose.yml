@@ -136,6 +136,8 @@ services:
       BADSECTOR_JS_CHALLENGE_TEMPLATE_PATH: /etc/badsector/challenge/template.html
       # Virgul ile yonetim IP'leri — ban/GeoIP/challenge muaf (.env: BADSECTOR_TRUSTED_IPS)
       BADSECTOR_TRUSTED_IPS: ${BADSECTOR_TRUSTED_IPS:-}
+      # false = edge (spoof kapali). Cloudflare arkasi: true
+      BADSECTOR_CLOUDFLARE: ${BADSECTOR_CLOUDFLARE:-false}
     volumes:
       - runtime_config:/etc/badsector/runtime:ro
       - ./data/geoip:/etc/badsector/geoip:ro
@@ -177,6 +179,7 @@ services:
       BADSECTOR_REDIS_HOST: redis
       BADSECTOR_REDIS_PORT: "6379"
       BADSECTOR_TRUSTED_IPS: ${BADSECTOR_TRUSTED_IPS:-}
+      BADSECTOR_CLOUDFLARE: ${BADSECTOR_CLOUDFLARE:-false}
     ports:
       - "9080:9080"
       - "80:80"

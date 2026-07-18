@@ -91,4 +91,47 @@ if [ -n "$BADSECTOR_REDIS_HOST" ] && ! is_ip "$BADSECTOR_REDIS_HOST"; then
     fi
 fi
 
+# Client IP: BADSECTOR_CLOUDFLARE=true|false → maps/client-ip-policy.cfg (volume yazilabilir)
+apply_client_ip_policy() {
+    mkdir -p "$MAP_DIR" 2>/dev/null || true
+    _policy="${MAP_DIR}/client-ip-policy.cfg"
+    _cf=$(echo "${BADSECTOR_CLOUDFLARE:-false}" | tr '[:upper:]' '[:lower:]')
+    case "$_cf" in
+        1|true|yes|on) _mode=cloudflare ;;
+        *) _mode=edge ;;
+    esac
+
+    if [ "$_mode" = "cloudflare" ]; then
+        cat > "$_policy" <<'EOF' || return 1
+# BADSECTOR_CLOUDFLARE=true — CF-Connecting-IP guvenilir; X-Real-IP ondan.
+    http-request del-header True-Client-IP
+    http-request del-header X-Client-IP
+    http-request del-header X-Forwarded-For
+    http-request set-header X-Real-IP %[req.hdr(CF-Connecting-IP)] if { req.hdr(CF-Connecting-IP) -m found }
+    http-request set-header X-Real-IP %[src] unless { req.hdr(CF-Connecting-IP) -m found }
+    option forwardfor
+EOF
+        echo "badsector entrypoint: client IP policy = cloudflare" >&2
+    else
+        cat > "$_policy" <<'EOF' || return 1
+# BADSECTOR_CLOUDFLARE=false — edge; spoof header sil, X-Real-IP=%[src]
+    http-request del-header CF-Connecting-IP
+    http-request del-header True-Client-IP
+    http-request del-header X-Client-IP
+    http-request del-header X-Forwarded-For
+    http-request set-header X-Real-IP %[src]
+    option forwardfor
+EOF
+        echo "badsector entrypoint: client IP policy = edge" >&2
+    fi
+}
+
+if ! apply_client_ip_policy; then
+    echo "badsector entrypoint: WARNING could not write client-ip-policy.cfg" >&2
+    # Son care: image default
+    if [ ! -f "${MAP_DIR}/client-ip-policy.cfg" ] && [ -f /usr/local/share/badsector/maps-default/client-ip-policy.cfg ]; then
+        cp /usr/local/share/badsector/maps-default/client-ip-policy.cfg "${MAP_DIR}/client-ip-policy.cfg" 2>/dev/null || true
+    fi
+fi
+
 exec "$@"

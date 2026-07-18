@@ -1,9 +1,26 @@
 --[[
-  Resolve the original client IP when BadSector sits behind HAProxy, Cloudflare, etc.
-  Header values may be a string or a table (duplicate headers in OpenResty).
+  Client IP resolution.
+
+  BADSECTOR_CLOUDFLARE=false (varsayilan, edge = BadSector):
+    X-Real-IP (HAProxy %[src]) → remote_addr
+    CF-Connecting-IP / XFF okunmaz (spoof kapali).
+
+  BADSECTOR_CLOUDFLARE=true (trafik Cloudflare uzerinden):
+    CF-Connecting-IP → X-Real-IP → remote_addr
+
+  Ileri seviye (nadiren): BADSECTOR_TRUST_X_FORWARDED_FOR=true
 ]]
 
 local _M = {}
+
+local function env_on(name)
+    local v = (os.getenv(name) or ""):lower()
+    return v == "1" or v == "true" or v == "yes" or v == "on"
+end
+
+-- Ana anahtar (+ eski env adi geriye uyumluluk)
+local CLOUDFLARE = env_on("BADSECTOR_CLOUDFLARE") or env_on("BADSECTOR_TRUST_CF_CONNECTING_IP")
+local TRUST_XFF = env_on("BADSECTOR_TRUST_X_FORWARDED_FOR")
 
 local function trim(s)
     if not s or type(s) ~= "string" then
@@ -12,7 +29,6 @@ local function trim(s)
     return (s:match("^%s*(.-)%s*$")) or ""
 end
 
---- Normalize ngx header value to a single string.
 local function header_string(value)
     if value == nil then
         return nil
@@ -75,22 +91,24 @@ local function first_ip_from_xff(xff)
     return first_public or first
 end
 
---- Client IP: CF-Connecting-IP (Cloudflare) → X-Forwarded-For → X-Real-IP → remote_addr.
 ---@return string
 function _M.from_request()
     local headers = ngx.req.get_headers()
 
-    -- Cloudflare (orange cloud) sends the visitor IP here.
-    local cf_ip = header_value(headers, "CF-Connecting-IP", "cf-connecting-ip")
-    if cf_ip then
-        return cf_ip
+    if CLOUDFLARE then
+        local cf_ip = header_value(headers, "CF-Connecting-IP", "cf-connecting-ip")
+        if cf_ip then
+            return cf_ip
+        end
     end
 
-    local xff = header_value(headers, "X-Forwarded-For", "x-forwarded-for")
-    if xff then
-        local ip = first_ip_from_xff(xff)
-        if ip then
-            return ip
+    if TRUST_XFF then
+        local xff = header_value(headers, "X-Forwarded-For", "x-forwarded-for")
+        if xff then
+            local ip = first_ip_from_xff(xff)
+            if ip then
+                return ip
+            end
         end
     end
 
