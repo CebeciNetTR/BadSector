@@ -11,18 +11,16 @@ COPY maps/ /usr/local/share/badsector/maps-default/
 COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 
 USER root
-# socat: admin socket'e (stats socket) canli "set/add map" komutlari gondermek icin (restart'siz esik degistirme)
-# /var/run/haproxy: admin socket dizini. Container "USER haproxy" ile calistigi icin
-# dizin onceden olusturulup haproxy kullanicisina devredilmeli, yoksa socket acilamaz.
-RUN apk add --no-cache socat \
+# socat: admin socket; su-exec: entrypoint root iken haproxy'ye dusmek icin
+RUN apk add --no-cache socat su-exec \
     && mkdir -p /var/run/haproxy \
     && chown -R haproxy:haproxy /var/run/haproxy /usr/local/etc/haproxy/maps \
     && cp "/usr/local/etc/haproxy/haproxy-${HAPROXY_CONFIG}.cfg" /usr/local/etc/haproxy/haproxy.cfg \
     && chown haproxy:haproxy /usr/local/etc/haproxy/haproxy.cfg \
+    && chmod u+w /usr/local/etc/haproxy/haproxy.cfg \
     && chmod +x /usr/local/bin/docker-entrypoint.sh
 
-USER haproxy
-
+# Entrypoint root calisir (maps volume + cfg patch); sonra su-exec haproxy.
 EXPOSE 9080 80 443
 
 ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]

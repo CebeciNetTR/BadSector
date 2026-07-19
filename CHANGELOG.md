@@ -14,7 +14,7 @@ All notable changes to BadSector are documented here.
 
 ### Fixed
 
-- **Client IP spoof** — `BADSECTOR_CLOUDFLARE=false` (varsayılan): HAProxy spoof header siler, `X-Real-IP=%[src]`; engine CF/XFF okumaz. `true`: CF-Connecting-IP güvenilir (entrypoint `client-ip-policy.cfg`).
+- **Client IP spoof** — `BADSECTOR_CLOUDFLARE=false` (varsayılan): HAProxy spoof header siler, `X-Real-IP=%[src]`; engine CF/XFF okumaz. `true`: CF-Connecting-IP güvenilir (entrypoint `haproxy.cfg` CLIENT_IP_POLICY bloğunu yamar; `include` kullanılmaz).
 - **JS PoW SHA-256** — İstemci script'i `h` state'ini cache'leyip bozuyordu (2. hash'ten itibaren yanlış); IV artık her çağrıda kopyalanır.
 - **Pipeline tik kaldırma kaybolmuyordu** — GORM `Enabled bool` + `default:true` false değerini DB'ye yazmıyordu; Create'te `Select` + model tag düzeltmesi. Pipeline kaydı artık config göndermez (placeholder GeoIP ezmesi yok).
 - **JS challenge favicon ban** — `/favicon.ico` ve statik asset'ler challenge dışı; ban sayacı yalnızca belge navigasyonunda artar. Eşik varsayılan **5**. PoW sonrası boş 302/`block` flash'i → düzgün REDIRECT + Set-Cookie.

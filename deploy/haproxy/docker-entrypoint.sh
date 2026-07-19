@@ -62,8 +62,8 @@ resolve_ipv4() {
 MAP_DIR="/usr/local/etc/haproxy/maps"
 MAP_FILE="${MAP_DIR}/site-ratelimit.map"
 DEFAULT_MAP="/usr/local/share/badsector/maps-default/site-ratelimit.map"
+mkdir -p "$MAP_DIR" 2>/dev/null || true
 if [ ! -f "$MAP_FILE" ]; then
-    mkdir -p "$MAP_DIR" 2>/dev/null || true
     if [ -f "$DEFAULT_MAP" ]; then
         cp "$DEFAULT_MAP" "$MAP_FILE" 2>/dev/null || true
     else
@@ -75,6 +75,8 @@ if [ ! -f "$MAP_FILE" ]; then
         echo "badsector entrypoint: WARNING could not seed $MAP_FILE (check data/haproxy perms)" >&2
     fi
 fi
+# Volume root ile mount edilmis olabilir — haproxy yazabilsin
+chown -R haproxy:haproxy "$MAP_DIR" 2>/dev/null || true
 
 if [ -n "$BADSECTOR_REDIS_HOST" ] && ! is_ip "$BADSECTOR_REDIS_HOST"; then
     resolved=$(resolve_ipv4 "$BADSECTOR_REDIS_HOST")
@@ -91,47 +93,69 @@ if [ -n "$BADSECTOR_REDIS_HOST" ] && ! is_ip "$BADSECTOR_REDIS_HOST"; then
     fi
 fi
 
-# Client IP: BADSECTOR_CLOUDFLARE=true|false → maps/client-ip-policy.cfg (volume yazilabilir)
+# Client IP: BADSECTOR_CLOUDFLARE → haproxy.cfg icindeki BEGIN/END_CLIENT_IP_POLICY blogu
+# (HAProxy 2.9 backend'de `include` desteklemez; maps volume yazma da kirilgan.)
 apply_client_ip_policy() {
-    mkdir -p "$MAP_DIR" 2>/dev/null || true
-    _policy="${MAP_DIR}/client-ip-policy.cfg"
+    _cfg="/usr/local/etc/haproxy/haproxy.cfg"
+    [ -f "$_cfg" ] || return 0
+
     _cf=$(echo "${BADSECTOR_CLOUDFLARE:-false}" | tr '[:upper:]' '[:lower:]')
     case "$_cf" in
         1|true|yes|on) _mode=cloudflare ;;
         *) _mode=edge ;;
     esac
 
+    _block_file=$(mktemp)
     if [ "$_mode" = "cloudflare" ]; then
-        cat > "$_policy" <<'EOF' || return 1
-# BADSECTOR_CLOUDFLARE=true — CF-Connecting-IP guvenilir; X-Real-IP ondan.
+        cat > "$_block_file" <<'EOF'
+    # BEGIN_CLIENT_IP_POLICY
     http-request del-header True-Client-IP
     http-request del-header X-Client-IP
     http-request del-header X-Forwarded-For
     http-request set-header X-Real-IP %[req.hdr(CF-Connecting-IP)] if { req.hdr(CF-Connecting-IP) -m found }
     http-request set-header X-Real-IP %[src] unless { req.hdr(CF-Connecting-IP) -m found }
     option forwardfor
+    # END_CLIENT_IP_POLICY
 EOF
         echo "badsector entrypoint: client IP policy = cloudflare" >&2
     else
-        cat > "$_policy" <<'EOF' || return 1
-# BADSECTOR_CLOUDFLARE=false — edge; spoof header sil, X-Real-IP=%[src]
+        cat > "$_block_file" <<'EOF'
+    # BEGIN_CLIENT_IP_POLICY
     http-request del-header CF-Connecting-IP
     http-request del-header True-Client-IP
     http-request del-header X-Client-IP
     http-request del-header X-Forwarded-For
     http-request set-header X-Real-IP %[src]
     option forwardfor
+    # END_CLIENT_IP_POLICY
 EOF
         echo "badsector entrypoint: client IP policy = edge" >&2
     fi
+
+    _tmp=$(mktemp)
+    if awk -v bf="$_block_file" '
+        BEGIN { skip=0 }
+        /# BEGIN_CLIENT_IP_POLICY/ {
+            while ((getline line < bf) > 0) print line
+            close(bf)
+            skip=1
+            next
+        }
+        /# END_CLIENT_IP_POLICY/ { skip=0; next }
+        !skip { print }
+    ' "$_cfg" > "$_tmp"; then
+        cat "$_tmp" > "$_cfg"
+        chown haproxy:haproxy "$_cfg" 2>/dev/null || true
+    else
+        echo "badsector entrypoint: WARNING client IP policy patch failed" >&2
+    fi
+    rm -f "$_tmp" "$_block_file"
 }
 
-if ! apply_client_ip_policy; then
-    echo "badsector entrypoint: WARNING could not write client-ip-policy.cfg" >&2
-    # Son care: image default
-    if [ ! -f "${MAP_DIR}/client-ip-policy.cfg" ] && [ -f /usr/local/share/badsector/maps-default/client-ip-policy.cfg ]; then
-        cp /usr/local/share/badsector/maps-default/client-ip-policy.cfg "${MAP_DIR}/client-ip-policy.cfg" 2>/dev/null || true
-    fi
-fi
+apply_client_ip_policy
 
+# Root ile basladik; sureci haproxy kullanicisina dusur
+if [ "$(id -u)" = "0" ] && command -v su-exec >/dev/null 2>&1; then
+    exec su-exec haproxy "$@"
+fi
 exec "$@"
