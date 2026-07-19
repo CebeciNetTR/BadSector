@@ -75,12 +75,17 @@ services:
       BADSECTOR_ADMIN_PASSWORD: ${BADSECTOR_ADMIN_PASSWORD:-badsector}
       BADSECTOR_DEFAULT_BACKEND_URL: "http://backend:80"
       BADSECTOR_ENGINE_RELOAD_URL: "http://engine:8080/badsector/admin/reload"
-      BADSECTOR_ENGINE_ADMIN_TOKEN: "badsector-engine-token"
       BADSECTOR_GEOIP_PATH: /data/geoip
       BADSECTOR_BOTS_PATH: /data/bots
       BADSECTOR_CERTS_PATH: /data/certs
+      BADSECTOR_CHALLENGE_DIR: /data/challenge
+      BADSECTOR_RESTORE_DIR: /data/restore
       BADSECTOR_ACME_EMAIL: ${BADSECTOR_ACME_EMAIL:-}
       BADSECTOR_ACME_STAGING: ${BADSECTOR_ACME_STAGING:-false}
+      BADSECTOR_CLOUDFLARE: ${BADSECTOR_CLOUDFLARE:-false}
+      BADSECTOR_TRUSTED_IPS: ${BADSECTOR_TRUSTED_IPS:-}
+      BADSECTOR_CHALLENGE_SECRET: ${BADSECTOR_CHALLENGE_SECRET:-badsector-dev-challenge-secret-change-me}
+      BADSECTOR_ENGINE_ADMIN_TOKEN: ${BADSECTOR_ENGINE_ADMIN_TOKEN:-badsector-engine-token}
     ports:
       # SADECE localhost — API'ye tarayici, ui nginx uzerinden (/api proxy) erisir;
       # disaridan dogrudan 8080'e erisime gerek yok.
@@ -91,6 +96,8 @@ services:
       - ./data/geoip:/data/geoip:ro
       - ./data/bots:/data/bots:ro
       - ./data/certs:/data/certs
+      - ./data/challenge:/data/challenge
+      - ./data/restore:/data/restore
     depends_on:
       postgres:
         condition: service_healthy
@@ -120,7 +127,7 @@ services:
       BADSECTOR_REDIS_PORT: "6379"
       BADSECTOR_REDIS_TIMEOUT: "100"
       BADSECTOR_RUNTIME: /etc/badsector/runtime
-      BADSECTOR_ENGINE_ADMIN_TOKEN: "badsector-engine-token"
+      BADSECTOR_ENGINE_ADMIN_TOKEN: ${BADSECTOR_ENGINE_ADMIN_TOKEN:-badsector-engine-token}
       BADSECTOR_TRACE_BUFFER_SIZE: "100"
       # Trusted bot rDNS dogrulamasi icin DNS resolver (Docker embedded DNS).
       BADSECTOR_DNS_RESOLVER: "127.0.0.11"
@@ -260,7 +267,7 @@ services:
       BADSECTOR_REDIS_URL: "redis://redis:6379"
       BADSECTOR_DEFAULT_BACKEND_URL: "http://backend:80"
       BADSECTOR_ENGINE_RELOAD_URL: "http://engine:8080/badsector/admin/reload"
-      BADSECTOR_ENGINE_ADMIN_TOKEN: "badsector-engine-token"
+      BADSECTOR_ENGINE_ADMIN_TOKEN: ${BADSECTOR_ENGINE_ADMIN_TOKEN:-badsector-engine-token}
       BADSECTOR_GEOIP_PATH: /data/geoip
       BADSECTOR_GEOIP_SYNC_INTERVAL: "24h"
       BADSECTOR_BOTS_PATH: /data/bots

@@ -27,6 +27,7 @@ All notable changes to BadSector are documented here.
 
 ### Added
 
+- **Backup / Restore** — Panel + `GET /backup` / `POST /backup/restore`: DB + TLS certs + optional `secrets.env`. Secrets: `keep` \| `rotate` \| `skip`. Scripts: `scripts/backup.sh`, `scripts/restore.sh`. ([BACKUP.md](docs/BACKUP.md))
 - **Trusted IPs** — `BADSECTOR_TRUSTED_IPS` (env, kodda sabit IP yok): iptables ACCEPT, watcher/HAProxy ban muaf, engine pipeline/GeoIP/challenge bypass. `scripts/clear-bans.sh` ile toplu ban temizliği.
 - **GeoIP challenge fail → ban** — `deny_action=challenge` iken 60 sn / `ban_threshold` (varsayılan 5) çözümsüz belge → `bs:ban:<ip>=geoip_challenge`. TR allow etkilenmez; favicon/statik sayılmaz. Ayrı `js_challenge` gerekmez.
 - **GeoIP `deny_action`** — Allow-list dışı / block list için `block` (403), `drop` (444), `challenge` (JS PoW). Challenge sonrası `bs_pass` GeoIP’de de doğrulanır (döngü yok). UI + engine.

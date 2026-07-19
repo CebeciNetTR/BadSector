@@ -218,4 +218,66 @@ export const api = {
       method: 'PUT',
       body: JSON.stringify({ enabled }),
     }),
+
+  downloadBackup: async (includeSecrets = true) => {
+    const res = await fetch(`${BASE}/backup?include_secrets=${includeSecrets ? 'true' : 'false'}`, {
+      headers: { ...authHeaders() },
+    })
+    if (!res.ok) {
+      let message = res.statusText
+      try {
+        const body = await res.json()
+        if (body?.error) message = body.error
+      } catch {
+        /* ignore */
+      }
+      if (res.status === 401) {
+        clearToken()
+        notifyUnauthorized()
+      }
+      throw new ApiError(message, res.status)
+    }
+    const blob = await res.blob()
+    const cd = res.headers.get('Content-Disposition') || ''
+    const m = cd.match(/filename=([^;]+)/)
+    const name = m ? m[1].replace(/"/g, '') : `badsector-backup-${Date.now()}.zip`
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = name
+    a.click()
+    URL.revokeObjectURL(url)
+  },
+
+  restoreBackup: async (file: File, secretsMode: 'keep' | 'rotate' | 'skip' = 'keep') => {
+    const fd = new FormData()
+    fd.append('file', file)
+    const res = await fetch(`${BASE}/backup/restore?secrets_mode=${secretsMode}`, {
+      method: 'POST',
+      headers: { ...authHeaders() },
+      body: fd,
+    })
+    if (!res.ok) {
+      let message = res.statusText
+      try {
+        const body = await res.json()
+        if (body?.error) message = body.error
+      } catch {
+        /* ignore */
+      }
+      if (res.status === 401) {
+        clearToken()
+        notifyUnauthorized()
+      }
+      throw new ApiError(message, res.status)
+    }
+    return res.json() as Promise<{
+      sites_restored: number
+      cert_files: number
+      secrets_mode: string
+      secrets_path?: string
+      rotated?: Record<string, string>
+      message: string
+    }>
+  },
 }

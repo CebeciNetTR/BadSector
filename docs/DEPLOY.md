@@ -256,6 +256,7 @@ cd /opt/badsector && docker compose stop watcher   # geçici
 | Pipeline — tikler kaydedilir (Enabled DB kolonu) | Pipeline |
 | GeoIP allow-list / block | Edge Security → GeoIP; `fail_open=true` kalsın |
 | Client IP (spoof) | `.env` → `BADSECTOR_CLOUDFLARE=false` (edge) / `true` (CF arkası). HAProxy + engine birlikte |
+| Backup / DR | Panel **Backup / Restore** veya [BACKUP.md](BACKUP.md) — zip = DB + certs + secrets |
 | Header fallback | Edge'de GeoIP `CF-IPCountry` fallback'i kapatın |
 | GeoIP MMDB | `MAXMIND_LICENSE_KEY` + worker log |
 | JS challenge eşiği | Challenges → `ban_threshold` (varsayılan 5) |

@@ -12,6 +12,7 @@ import RateLimits from './pages/RateLimits'
 import SecurityModules from './pages/SecurityModules'
 import Trace from './pages/Trace'
 import Certificates from './pages/Certificates'
+import BackupRestore from './pages/BackupRestore'
 
 const nav = [
   { to: '/', label: 'Dashboard' },
@@ -22,8 +23,9 @@ const nav = [
   { to: '/managed-waf', label: 'Managed WAF' },
   { to: '/pipeline', label: 'Pipeline' },
   { to: '/trace', label: 'Request Trace' },
-  { to: '/modules', label: 'Modules' },
   { to: '/certificates', label: 'Certificates' },
+  { to: '/backup', label: 'Backup / Restore' },
+  { to: '/modules', label: 'Modules' },
   { to: '/threat-intel', label: 'Threat Intelligence' },
   { to: '/analytics', label: 'Analytics' },
   { to: '/logs', label: 'Logs' },
@@ -144,6 +146,7 @@ export default function App() {
           <Route path="/pipeline" element={<Pipeline />} />
           <Route path="/trace" element={<Trace />} />
           <Route path="/certificates" element={<Certificates />} />
+          <Route path="/backup" element={<BackupRestore />} />
           <Route path="*" element={<Placeholder title="Coming soon" />} />
         </Routes>
       </main>

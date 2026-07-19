@@ -99,6 +99,9 @@ func (h *Handler) Register(g *echo.Group) {
 	g.GET("/attack-mode", h.getAttackMode)
 	g.PUT("/attack-mode", h.updateAttackMode)
 
+	g.GET("/backup", h.createBackup)
+	g.POST("/backup/restore", h.restoreBackup)
+
 	g.GET("/sites/:id/traces", h.listTraces)
 
 	g.POST("/runtime/reload", h.reloadRuntime)

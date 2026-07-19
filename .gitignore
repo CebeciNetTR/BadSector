@@ -41,6 +41,10 @@ data/*
 !data/challenge/.gitkeep
 !data/challenge/template.html.example
 !data/challenge/README.md
+!data/restore/
+!data/restore/.gitkeep
+data/restore/*
+!data/restore/.gitkeep
 data/geoip/*.mmdb
 data/geoip/*.tar.gz
 data/certs/*
@@ -74,8 +78,8 @@ logs/
 .DS_Store
 Thumbs.db
 
-# Docker volumes
-volumes/
+backups/
+*.zip
 
 # Generated config (dev)
 generated/
