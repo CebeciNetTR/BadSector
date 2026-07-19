@@ -17,8 +17,11 @@ Country lookup via **GeoLite2-Country.mmdb** (worker auto-download). Optional he
 | `use_header_fallback` | Use `CF-IPCountry` / `X-Country-Code` if lookup fails |
 | `fail_open` | Continue if country unknown |
 | `deny_action` | `block` (403) \| `drop` (444) \| `challenge` (JS PoW). Default `block`. |
+| `ban_threshold` / `ban_ttl` | Challenge fail → ban (default 5 / 60s window, TTL 86400). Redis: `geoip_challenge` |
 
 Sets `ctx.vars.country` and `ctx.enrich.geo`. See [GEOIP.md](GEOIP.md).
+
+**`deny_action=challenge`:** TR (allow) serbest; yabancı PoW görür. Ayrı `js_challenge` modülü gerekmez. 60 sn içinde `ban_threshold` çözümsüz belge → ban. Statik asset sayılmaz.
 
 ## Custom Rules (`custom_rules`)
 

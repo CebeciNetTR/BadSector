@@ -23,6 +23,9 @@ func DefaultGeoipConfig() map[string]interface{} {
 		"allow_only":          false,
 		"use_header_fallback": true,
 		"deny_action":         "block", // block | drop | challenge
+		"ban_threshold":       5,       // challenge fail / 60s → ban
+		"ban_ttl":             86400,
+		"pass_ttl":            3600,
 	}
 }
 

@@ -50,13 +50,17 @@ Config via **Edge Security → GeoIP** or `GET/PUT /api/v1/sites/:id/geoip`.
 | `fail_open` | Continue if lookup fails (**production'da true kalsın**) |
 | `use_header_fallback` | Use `CF-IPCountry` / `X-Country-Code` if MMDB missing |
 | `deny_action` | Reddetmede ne yapılsın: `block` (403), `drop` (444), `challenge` (JS PoW). Varsayılan `block`. |
+| `ban_threshold` | Yalnız `challenge`: 60 sn içinde bu kadar çözümsüz **belge** isteği → Redis ban (varsayılan **5**) |
+| `ban_ttl` | Ban süresi saniye (varsayılan 86400). Redis değeri: `geoip_challenge` |
+| `pass_ttl` | `bs_pass` süresi (varsayılan 3600) |
 
 Sets `ctx.enrich.geo` and `ctx.vars.country` for policy conditions.
 
 ### Production notes (edge = BadSector)
 
 - **`allow_only` + `TR`**: Yabancı trafik `deny_action` ile kesilir (varsayılan 403). `trusted_bots` pipeline'da **önce** olduğu için doğrulanmış Googlebot/Bingbot muaf kalır.
-- **`deny_action: challenge`**: Allow-list dışı ülkelere JS PoW gösterir (GeoIP aşamasında). `drop` ise bağlantıyı sessiz kapatır.
+- **`deny_action: challenge`**: Allow-list dışı ülkelere JS PoW; TR kullanıcı challenge görmez. Ayrı `js_challenge` modülü gerekmez. Fail sayacı favicon/statik asset'te artmaz; eşik aşılınca `bs:ban:<ip>=geoip_challenge`.
+- **`drop`**: Bağlantıyı sessiz kapatır (ban sayacı yok).
 - **`fail_open: true`**: MMDB bir an eksikken tüm siteyi kilitlemez.
 - **`use_header_fallback`**: Siz Cloudflare arkasında değilseniz **kapatın**. Aksi halde istemci sahte `CF-IPCountry: TR` ile (MMDB çözülemediğinde) allow-list'i atlayabilir.
 - GeoIP **challenge muafiyeti değildir** — TR kullanıcı attack mode / js_challenge açıksa yine challenge görür. Challenge'ı kapatmak veya attack mode'u kapalı tutmak ayrı ayardır.

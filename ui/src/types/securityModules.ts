@@ -13,6 +13,10 @@ export interface GeoipConfig {
   use_header_fallback: boolean
   /** block=403 | drop=444 silent | challenge=JS PoW */
   deny_action: GeoipDenyAction
+  /** deny_action=challenge: 60s içinde bu kadar belge fail → Redis ban */
+  ban_threshold?: number
+  ban_ttl?: number
+  pass_ttl?: number
 }
 
 export interface GeoipStatus {
@@ -148,6 +152,9 @@ export function defaultGeoipConfig(): GeoipConfig {
     allow_only: false,
     use_header_fallback: true,
     deny_action: 'block',
+    ban_threshold: 5,
+    ban_ttl: 86400,
+    pass_ttl: 3600,
   }
 }
 

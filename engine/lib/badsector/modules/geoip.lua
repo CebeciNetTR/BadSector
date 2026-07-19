@@ -3,7 +3,15 @@ local decision = require("badsector.decision")
 local util = require("badsector.util")
 local M = {
     name = "geoip",
-    version = "1.1.1",
+    version = "1.2.0",
+}
+
+local STATIC_EXT = {
+    ico = true, png = true, jpg = true, jpeg = true, gif = true, webp = true,
+    svg = true, bmp = true, avif = true, css = true, js = true, mjs = true,
+    map = true, woff = true, woff2 = true, ttf = true, eot = true, otf = true,
+    mp4 = true, webm = true, mp3 = true, wav = true, pdf = true, zip = true,
+    txt = true, xml = true, json = true, webmanifest = true,
 }
 
 local cfg = {
@@ -15,11 +23,14 @@ local cfg = {
     use_header_fallback = true,
     -- block (403) | drop (444 silent) | challenge (JS PoW)
     deny_action = "block",
+    -- deny_action=challenge: 60s icinde ban_threshold belge challenge → Redis ban
+    ban_threshold = 5,
+    ban_ttl = 86400,
+    pass_ttl = 3600,
 }
 
 local PASS_COOKIE = "bs_pass"
 local POW_COOKIE = "bs_pow"
-local PASS_TTL = 3600
 
 local country_db_ok = false
 
@@ -39,6 +50,9 @@ function M.reload(config)
     cfg.allow_only = config.allow_only == true
     cfg.use_header_fallback = config.use_header_fallback ~= false
     cfg.deny_action = normalize_deny_action(config.deny_action)
+    cfg.ban_threshold = tonumber(config.ban_threshold) or 5
+    cfg.ban_ttl = tonumber(config.ban_ttl) or 86400
+    cfg.pass_ttl = tonumber(config.pass_ttl) or 3600
 
     country_db_ok = false
     local _, status, err = geo_lookup.lookup_country("8.8.8.8", cfg.database_path)
@@ -106,6 +120,78 @@ local function get_cookie(headers, name)
     return nil
 end
 
+local function is_static_asset(path)
+    if type(path) ~= "string" or path == "" then
+        return false
+    end
+    local p = path:match("^([^?]*)") or path
+    local ext = p:match("%.([%w]+)$")
+    if ext and STATIC_EXT[ext:lower()] then
+        return true
+    end
+    return false
+end
+
+local function is_document_navigation(headers)
+    headers = headers or {}
+    local dest = util.header_get(headers, "Sec-Fetch-Dest")
+    if dest then
+        dest = dest:lower()
+        if dest == "document" or dest == "iframe" then
+            return true
+        end
+        if dest ~= "" then
+            return false
+        end
+    end
+    local accept = util.header_get(headers, "Accept") or ""
+    if accept:find("text/html", 1, true) then
+        return true
+    end
+    return true
+end
+
+--- Cozumsuz / gecersiz GeoIP PoW sayaci → esik asilinca Redis ban.
+local function record_challenge_fail(ip)
+    if not ip or ip == "" then
+        return
+    end
+    local redis = require("badsector.redis")
+    local red = redis.connect()
+    if not red then
+        return
+    end
+    local fail_key = "bs:geo_fail:" .. ip
+    local count = red:incr(fail_key)
+    if count == 1 then
+        red:expire(fail_key, 60)
+    end
+    if count and count >= cfg.ban_threshold then
+        red:setex("bs:ban:" .. ip, cfg.ban_ttl, "geoip_challenge")
+        -- Ban cache hemen gorsun
+        local dict = ngx.shared.badsector_bans
+        if dict then
+            dict:set(ip, 1, 30)
+        end
+        ngx.log(ngx.WARN, "badsector: IP " .. ip
+            .. " banlandi (GeoIP challenge fail x" .. tostring(count) .. ")")
+    end
+    redis.keepalive(red)
+end
+
+local function clear_challenge_fail(ip)
+    if not ip or ip == "" then
+        return
+    end
+    local redis = require("badsector.redis")
+    local red = redis.connect()
+    if not red then
+        return
+    end
+    red:del("bs:geo_fail:" .. ip)
+    redis.keepalive(red)
+end
+
 --- deny_action=challenge: gecerli bs_pass / yeni cozum varsa allow-list'i atla.
 local function try_challenge_pass(ctx)
     local pow = require("badsector.pow")
@@ -121,19 +207,31 @@ local function try_challenge_pass(ctx)
 
     local sol = get_cookie(headers, POW_COOKIE)
     if sol then
-        local ok = pow.verify_solution(ip, sol)
+        local ok, err = pow.verify_solution(ip, sol)
         if ok then
-            local token = pow.make_pass(ip, ua, PASS_TTL)
+            clear_challenge_fail(ip)
+            local token = pow.make_pass(ip, ua, cfg.pass_ttl)
             local dest = ngx.var.request_uri or ctx.request.path or "/"
             ctx:trace("geoip", decision.CONTINUE, "GeoIP PoW cozuldu — pass veriliyor")
             return decision.redirect(dest, 302, {
                 ["Cache-Control"] = "no-store",
                 ["Set-Cookie"] = {
-                    PASS_COOKIE .. "=" .. token .. "; Path=/; Max-Age=" .. PASS_TTL .. "; HttpOnly; SameSite=Lax",
+                    PASS_COOKIE .. "=" .. token .. "; Path=/; Max-Age=" .. cfg.pass_ttl .. "; HttpOnly; SameSite=Lax",
                     POW_COOKIE .. "=; Path=/; Max-Age=0",
                 },
             })
         end
+        -- Gecersiz cozum: say + yeniden challenge
+        ctx:trace("geoip", decision.CHALLENGE, "Gecersiz GeoIP PoW: " .. tostring(err))
+        record_challenge_fail(ip)
+        local diff = pow.difficulty({})
+        local token = pow.make_challenge(ip, diff)
+        return decision.challenge("js", {
+            token = token,
+            difficulty = diff,
+            pow_cookie = POW_COOKIE,
+            template = "",
+        })
     end
     return nil
 end
@@ -146,14 +244,28 @@ local function deny(ctx, reason)
         return decision.RETURN_444
     end
     if action == "challenge" then
+        local path = ctx.request.path or ""
+        -- Favicon/asset: ban sayacina yazma, origin'e de verme
+        if is_static_asset(path) then
+            ctx:trace("geoip", decision.BLOCK, reason .. " (static skip challenge)")
+            return decision.block(403, "")
+        end
+
         local passed = try_challenge_pass(ctx)
         if passed then
             return passed
         end
+
         local pow = require("badsector.pow")
         local diff = pow.difficulty({})
         local token = pow.make_challenge(ctx.request.remote_addr, diff)
-        ctx:trace("geoip", decision.CHALLENGE, reason, { deny_action = "challenge", difficulty = diff })
+        if is_document_navigation(ctx.request.headers) then
+            record_challenge_fail(ctx.request.remote_addr)
+        end
+        ctx:trace("geoip", decision.CHALLENGE, reason, {
+            deny_action = "challenge",
+            difficulty = diff,
+        })
         return decision.challenge("js", {
             token = token,
             difficulty = diff,

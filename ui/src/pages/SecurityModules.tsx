@@ -260,6 +260,39 @@ export default function SecurityModules() {
                     <option value="challenge">JS Challenge (PoW)</option>
                   </select>
                 </label>
+                {(geoip.deny_action || 'block') === 'challenge' && (
+                  <>
+                    <label>
+                      Challenge ban eşiği (60 sn / belge)
+                      <input
+                        type="number"
+                        min={2}
+                        max={50}
+                        value={geoip.ban_threshold ?? 5}
+                        onChange={(e) => {
+                          setGeoip({ ...geoip, ban_threshold: Number(e.target.value) })
+                          markDirty()
+                        }}
+                      />
+                    </label>
+                    <label>
+                      Ban süresi (sn)
+                      <input
+                        type="number"
+                        min={60}
+                        value={geoip.ban_ttl ?? 86400}
+                        onChange={(e) => {
+                          setGeoip({ ...geoip, ban_ttl: Number(e.target.value) })
+                          markDirty()
+                        }}
+                      />
+                    </label>
+                    <p style={{ color: 'var(--muted)', fontSize: '0.8rem', gridColumn: '1 / -1', margin: 0 }}>
+                      TR (allow) kullanıcı challenge görmez. Yabancı / block-list: PoW; 60 sn içinde eşik kadar
+                      çözümsüz belge isteği → Redis ban (<code>geoip_challenge</code>). Favicon/statik sayılmaz.
+                    </p>
+                  </>
+                )}
                 <label>
                   Engellenen ülkeler (ISO, virgülle)
                   <input

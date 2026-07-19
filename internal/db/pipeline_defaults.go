@@ -72,6 +72,9 @@ func DefaultPipelineStages(siteID string) []PipelineStage {
 		"allow_only":          false,
 		"use_header_fallback": true,
 		"deny_action":         "block",
+		"ban_threshold":       5,
+		"ban_ttl":             86400,
+		"pass_ttl":            3600,
 	})
 
 	customRulesConfig, _ := json.Marshal(map[string]interface{}{
