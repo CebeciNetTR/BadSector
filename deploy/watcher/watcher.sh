@@ -86,6 +86,37 @@ ban_ip() {
     fi
 }
 
+# Engine/JS/GeoIP ban'lari sadece Redis'e yazar → HAProxy TLS sonrasi silent-drop.
+# Kernel'de yoksa CPU yine yanar. Redis bs:ban:* → ipset senkronu (TTL korunur).
+sync_redis_bans_to_kernel() {
+    local cursor="0" added=0 ip ttl keys key
+    while true; do
+        # redis-cli SCAN: cursor + optional keys
+        local out
+        out=$($REDIS --raw SCAN "$cursor" MATCH "bs:ban:*" COUNT 200 2>/dev/null | tr -d '\r')
+        [[ -z "$out" ]] && break
+        cursor=$(echo "$out" | head -n1)
+        keys=$(echo "$out" | tail -n +2)
+        while IFS= read -r key; do
+            [[ -z "$key" ]] && continue
+            ip="${key#bs:ban:}"
+            is_trusted "$ip" && continue
+            if [[ ! "$ip" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]] && [[ ! "$ip" =~ : ]]; then
+                continue
+            fi
+            ttl=$($REDIS TTL "$key" 2>/dev/null | tr -d '\r')
+            [[ -z "$ttl" || "$ttl" -lt 1 ]] && ttl="$BAN_TTL"
+            if ipset add "$IPSET_NAME" "$ip" timeout "$ttl" 2>/dev/null; then
+                added=$((added + 1))
+            fi
+        done <<< "$keys"
+        [[ "$cursor" == "0" ]] && break
+    done
+    if [[ "$added" -gt 0 ]]; then
+        log "KERNEL-SYNC: $added Redis ban → ipset (TLS oncesi DROP)"
+    fi
+}
+
 # Dusuk hit + uzun suredir gorulmeyen IP'leri bs:ip_hits / bs:ip_seen'den sil.
 # Aktif saldiri (yuksek hit veya taze seen) dokunulmaz. Redis EVAL — 18k IP'de ucuz.
 prune_stale_hits() {
@@ -149,6 +180,7 @@ while true; do
     fi
 
     prune_stale_hits
+    sync_redis_bans_to_kernel
 
     # Esigi asan IP'leri al ve satır sonu (\r) karakterlerini temizle
     HIGH_HIT_IPS=$($REDIS ZRANGEBYSCORE bs:ip_hits "$BAN_THRESHOLD" +inf 2>/dev/null | tr -d '\r')
