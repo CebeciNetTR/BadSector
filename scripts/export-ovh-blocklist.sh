@@ -151,31 +151,33 @@ if ! $ONLY_NON_TR; then
   echo "  (--include-tr: tum IP'ler export'ta)"
 fi
 
-# /24: sadece non-TR export; subnet icinde TR varsa SKIP
+# /24: GEO_ALL uzerinden; subnet icinde geo=TR varsa SKIP; yoksa non-TR sayisi >= min
 awk -v min="$MIN_SUBNET" '
-  NR==FNR { split($1,a,"."); geo[$1]=$2; next }
   {
-    ip=$1; cc=geo[ip]; if (cc=="") cc="??"
+    ip=$1; cc=$2; if (cc=="") cc="??"
     split(ip,a,"."); s=a[1]"."a[2]"."a[3]".0/24"
-    n[s]++; if (cc=="TR") tr[s]++; c[s","cc]++
+    n[s]++
+    if (cc=="TR") { tr[s]++ } else { nontr[s]++ }
+    c[s SUBSEP cc]++
   }
   END {
     for (s in n) {
-      if (n[s] < min) continue
       if (tr[s] > 0) {
         printf "# SKIP %s (%d IP) — icinde %d geo=TR\n", s, n[s], tr[s]
-        next
+        continue
       }
+      if (nontr[s] < min) continue
       tops=""
       for (k in c) {
         split(k, p, SUBSEP); if (p[1]!=s) continue
-        tops = tops p[2]":" c[k] " "
+        tops = tops p[2] ":" c[k] " "
       }
-      printf "%s (%d IP) geo=%s\n", s, n[s], tops
+      printf "%07d %s (%d IP) geo=%s\n", nontr[s], s, nontr[s], tops
     }
   }
-' "$GEO_ALL" "$EXPORT_SRC" | sort -t'(' -k2 -rn > "$SUBNETS"
+' "$GEO_ALL" | sort -rn | sed 's/^[0-9]* //' > "$SUBNETS"
 
+# Top tekil: non-TR listesinden (alfabetik degil — ipset/redis sirasi)
 head -n "$TOP_SINGLE" "$EXPORT_SRC" | while read -r ip; do
   cc=$(awk -v ip="$ip" '$1==ip {print $2; exit}' "$GEO_ALL")
   echo "$ip geo=$cc"
@@ -200,6 +202,10 @@ done > "$TOP"
   echo "# --- geo=TR ornek (banlama) ---"
   awk '$2=="TR" || $2=="tr" {print "geo=TR", $1}' "$GEO_ALL" | head -30
 } > "$OVH_RULES"
+
+echo ""
+echo "=== Top subnet (non-TR, OVH icin — ilk 10) ==="
+grep -v '^#' "$SUBNETS" | head -10 || echo "  (yok — min-subnet=$MIN_SUBNET artir: --min-subnet 3)"
 
 echo ""
 echo "=== Export tamam ==="
