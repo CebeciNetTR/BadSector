@@ -13,6 +13,10 @@ export interface GeoipConfig {
   use_header_fallback: boolean
   /** block=403 | drop=444 silent | challenge=JS PoW */
   deny_action: GeoipDenyAction
+  /** Attack mode acikken deny_action yerine (varsayilan drop) */
+  attack_deny_action?: GeoipDenyAction
+  /** Attack mode acikken ek engellenecek ulkeler */
+  attack_block_countries?: string[]
   /** deny_action=challenge: 60s içinde bu kadar belge fail → Redis ban */
   ban_threshold?: number
   ban_ttl?: number
@@ -35,6 +39,9 @@ export interface AsnConfig {
   allow_only: boolean
   ip_map: Record<string, { number?: number; org?: string }>
   fail_open: boolean
+  /** Attack mode: block/attack_block ASN icin eylem (drop | block) */
+  attack_deny_action?: 'drop' | 'block'
+  attack_block_asns?: number[]
 }
 
 export interface HeaderRule {
@@ -152,6 +159,8 @@ export function defaultGeoipConfig(): GeoipConfig {
     allow_only: false,
     use_header_fallback: true,
     deny_action: 'block',
+    attack_deny_action: 'drop',
+    attack_block_countries: [],
     ban_threshold: 5,
     ban_ttl: 86400,
     pass_ttl: 3600,
@@ -166,6 +175,8 @@ export function defaultAsnConfig(): AsnConfig {
     allow_only: false,
     ip_map: {},
     fail_open: true,
+    attack_deny_action: 'drop',
+    attack_block_asns: [],
   }
 }
 

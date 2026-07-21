@@ -4,28 +4,32 @@ import "github.com/labstack/echo/v4"
 
 func DefaultAsnConfig() map[string]interface{} {
 	return map[string]interface{}{
-		"enabled":        true,
-		"database_path":  "/etc/badsector/geoip/GeoLite2-ASN.mmdb",
-		"block_asns":     []interface{}{},
-		"allow_asns":     []interface{}{},
-		"allow_only":     false,
-		"ip_map":         map[string]interface{}{},
-		"fail_open":      true,
+		"enabled":            true,
+		"database_path":      "/etc/badsector/geoip/GeoLite2-ASN.mmdb",
+		"block_asns":         []interface{}{},
+		"allow_asns":         []interface{}{},
+		"allow_only":         false,
+		"ip_map":             map[string]interface{}{},
+		"fail_open":          true,
+		"attack_deny_action": "drop",
+		"attack_block_asns":  []interface{}{},
 	}
 }
 
 func DefaultGeoipConfig() map[string]interface{} {
 	return map[string]interface{}{
-		"database_path":       "/etc/badsector/geoip/GeoLite2-Country.mmdb",
-		"fail_open":           true,
-		"block_countries":     []interface{}{},
-		"allow_countries":     []interface{}{},
-		"allow_only":          false,
-		"use_header_fallback": true,
-		"deny_action":         "block", // block | drop | challenge
-		"ban_threshold":       5,       // challenge fail / 60s → ban
-		"ban_ttl":             86400,
-		"pass_ttl":            3600,
+		"database_path":          "/etc/badsector/geoip/GeoLite2-Country.mmdb",
+		"fail_open":              true,
+		"block_countries":        []interface{}{},
+		"allow_countries":        []interface{}{},
+		"allow_only":             false,
+		"use_header_fallback":    true,
+		"deny_action":            "block", // block | drop | challenge
+		"attack_deny_action":     "drop",  // attack mode: deny_action override
+		"attack_block_countries": []interface{}{},
+		"ban_threshold":          5, // challenge fail / 60s → ban
+		"ban_ttl":                86400,
+		"pass_ttl":               3600,
 	}
 }
 

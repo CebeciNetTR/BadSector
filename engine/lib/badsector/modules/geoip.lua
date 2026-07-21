@@ -1,9 +1,10 @@
 local geo_lookup = require("badsector.geo_lookup")
 local decision = require("badsector.decision")
 local util = require("badsector.util")
+local attack_mode = require("badsector.attack_mode")
 local M = {
     name = "geoip",
-    version = "1.2.0",
+    version = "1.3.0",
 }
 
 local STATIC_EXT = {
@@ -23,6 +24,10 @@ local cfg = {
     use_header_fallback = true,
     -- block (403) | drop (444 silent) | challenge (JS PoW)
     deny_action = "block",
+    -- attack mode acikken deny_action yerine (varsayilan drop — TLS flood'da challenge yok)
+    attack_deny_action = "drop",
+    -- attack mode acikken ekstra engellenecek ulkeler (normal kurallardan gecenler icin)
+    attack_block_countries = {},
     -- deny_action=challenge: 60s icinde ban_threshold belge challenge → Redis ban
     ban_threshold = 5,
     ban_ttl = 86400,
@@ -50,6 +55,8 @@ function M.reload(config)
     cfg.allow_only = config.allow_only == true
     cfg.use_header_fallback = config.use_header_fallback ~= false
     cfg.deny_action = normalize_deny_action(config.deny_action)
+    cfg.attack_deny_action = normalize_deny_action(config.attack_deny_action or "drop")
+    cfg.attack_block_countries = config.attack_block_countries or {}
     cfg.ban_threshold = tonumber(config.ban_threshold) or 5
     cfg.ban_ttl = tonumber(config.ban_ttl) or 86400
     cfg.pass_ttl = tonumber(config.pass_ttl) or 3600
@@ -236,9 +243,16 @@ local function try_challenge_pass(ctx)
     return nil
 end
 
+local function effective_deny_action()
+    if attack_mode.is_on() then
+        return cfg.attack_deny_action or "drop"
+    end
+    return cfg.deny_action or "block"
+end
+
 --- Apply configured deny_action for blocked / not-allowed countries.
 local function deny(ctx, reason)
-    local action = cfg.deny_action or "block"
+    local action = effective_deny_action()
     if action == "drop" then
         ctx:trace("geoip", decision.RETURN_444, reason)
         return decision.RETURN_444
@@ -312,6 +326,19 @@ function M.run(ctx, config)
     geo.country = geo.country:upper()
     ctx:set_var("country", geo.country)
     ctx:trace("geoip", decision.CONTINUE, "Country: " .. geo.country, { source = geo.source })
+
+    local attack_on = attack_mode.is_on()
+
+    -- Attack mode: yalnizca acik block listesi (allow_only devre disi — CN/BR gibi hedefli drop).
+    if attack_on then
+        if country_in_list(geo.country, cfg.block_countries) then
+            return deny(ctx, "Country blocked: " .. geo.country)
+        end
+        if country_in_list(geo.country, cfg.attack_block_countries) then
+            return deny(ctx, "Attack mode country blocked: " .. geo.country)
+        end
+        return decision.CONTINUE
+    end
 
     if cfg.allow_only and not country_in_list(geo.country, cfg.allow_countries) then
         return deny(ctx, "Country not allowed: " .. geo.country)

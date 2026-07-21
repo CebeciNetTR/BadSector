@@ -27,6 +27,7 @@ All notable changes to BadSector are documented here.
 
 ### Added
 
+- **Attack mode GeoIP / ASN** — Panelden `attack_block_countries` / `attack_block_asns` → Redis → **watcher kernel** (`ipset bs_attack_geo` ülke CIDR DROP, HAProxy öncesi; ASN hit→MMDB→`bs_banned`). Engine yedek katman. `allow_only`+TR → attack modunda tüm yabancı ülke kernel drop.
 - **TLS flood dayanımı** — `Idle_pct=0` / 13k conn altında: httplog kapatıldı, log `notice`, `timeout client 4s`, `fe_https maxconn 8000`, `conn_cur 12`. SSL fail log flood’u CPU’yu öldürmesin.
 - **Redis ban → kernel sync** — JS/GeoIP `bs:ban:*` artık watcher ile ipset’e yazılır (TLS öncesi DROP; sadece HAProxy silent-drop yetmezdi).
 - **Hit list prune** — `bs:ip_seen` last-seen; watcher `HIT_STALE_SEC=600` + `HIT_MIN_KEEP=10` ile stale/düşük istek IP’lerini `bs:ip_hits`’ten siler (günlük 18k birikimini keser). Yüksek hit / taze IP korunur.

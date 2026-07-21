@@ -203,7 +203,9 @@ awk -F'\t' 'NR<=10 {printf "  %3d IP  %s  %s\n", $1, $2, $3}' "$US_ASN"
 echo ""
 echo "=== Subnet >= ${MIN_SUBNET_ASN} IP — baskin ASN ==="
 grep -v '^# SKIP' "$SUBNET_ASN" | head -15
-skip_n=$(grep -c '^# SKIP' "$SUBNET_ASN" 2>/dev/null || echo 0)
+skip_n=$(grep -c '^# SKIP' "$SUBNET_ASN" 2>/dev/null || true)
+skip_n=${skip_n:-0}
+skip_n=$((skip_n + 0))
 [[ "$skip_n" -gt 0 ]] && echo "  (${skip_n} subnet TR icerdigi icin atlandi)"
 
 echo ""

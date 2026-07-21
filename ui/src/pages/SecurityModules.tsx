@@ -319,6 +319,27 @@ export default function SecurityModules() {
                     }}
                   />
                 </label>
+                <hr style={{ gridColumn: '1 / -1', border: 'none', borderTop: '1px solid var(--border)', margin: '0.5rem 0' }} />
+                <p style={{ gridColumn: '1 / -1', margin: 0, fontWeight: 600 }}>Attack mode (Dashboard anahtarı)</p>
+                <label>
+                  Attack mode kernel block (ülke ISO, virgülle)
+                  <input
+                    placeholder="CN, BR"
+                    value={(geoip.attack_block_countries ?? []).join(', ')}
+                    onChange={(e) => {
+                      setGeoip({
+                        ...geoip,
+                        attack_block_countries: e.target.value.split(',').map((x) => x.trim().toUpperCase()).filter(Boolean),
+                      })
+                      markDirty()
+                    }}
+                  />
+                </label>
+                <p style={{ color: 'var(--muted)', fontSize: '0.8rem', gridColumn: '1 / -1', margin: 0 }}>
+                  Attack mode açıkken yalnızca bu ülkeler (ve üstteki <code>Engellenen ülkeler</code> listesi)
+                  kernel <code>ipset</code> ile TLS/HAProxy öncesi DROP olur. <code>allow_only</code> attack modunda
+                  kernel&apos;e yansımaz — normal mod challenge/allow davranışı ayrı kalır.
+                </p>
               </div>
             </>
           )}
@@ -359,6 +380,42 @@ export default function SecurityModules() {
                   }}
                 />
               </label>
+              <hr style={{ border: 'none', borderTop: '1px solid var(--border)', margin: '1rem 0' }} />
+              <p style={{ margin: '0 0 0.5rem', fontWeight: 600 }}>Attack mode</p>
+              <label>
+                Attack mode reddetme eylemi
+                <select
+                  value={asn.attack_deny_action || 'drop'}
+                  onChange={(e) => {
+                    setAsn({
+                      ...asn,
+                      attack_deny_action: e.target.value as 'drop' | 'block',
+                    })
+                    markDirty()
+                  }}
+                >
+                  <option value="drop">444 Silent drop (önerilen)</option>
+                  <option value="block">403 Block</option>
+                </select>
+              </label>
+              <label>
+                Attack mode engelli ASN (virgülle)
+                <input
+                  placeholder="45899, 394474"
+                  value={(asn.attack_block_asns ?? []).join(', ')}
+                  onChange={(e) => {
+                    setAsn({
+                      ...asn,
+                      attack_block_asns: e.target.value.split(',').map((x) => parseInt(x.trim(), 10)).filter((n) => !Number.isNaN(n)),
+                    })
+                    markDirty()
+                  }}
+                />
+              </label>
+              <p className="empty-state">
+                <strong>Kernel:</strong> Attack modunda listedeki ASN&apos;lere ait IP&apos;ler (hit≥1) watcher ile{' '}
+                <code>ipset bs_banned</code>&apos;a yazılır — TLS öncesi DROP. Pipeline&apos;da modül etkin olmalı.
+              </p>
               <p className="empty-state">
                 ASN lookup: <code>GeoLite2-ASN.mmdb</code> (worker indirir). Manuel override: <code>ip_map</code>.
               </p>

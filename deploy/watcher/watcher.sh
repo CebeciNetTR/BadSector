@@ -170,6 +170,10 @@ log "Esik: $BAN_THRESHOLD hit | Kontrol: ${CHECK_INTERVAL}s | Ban TTL: ${BAN_TTL
 log "Prune: stale>${HIT_STALE_SEC}s AND hit<${HIT_MIN_KEEP}"
 log "Trusted IPs: $TRUSTED_IPS"
 
+# Kernel attack blocks (iptables/ipset — HAProxy oncesi)
+# shellcheck source=attack-kernel.sh
+source /usr/local/bin/attack-kernel.sh
+
 setup_ipset
 
 while true; do
@@ -185,6 +189,7 @@ while true; do
 
     prune_stale_hits
     sync_redis_bans_to_kernel
+    sync_attack_kernel
 
     # Esigi asan IP'leri al ve satır sonu (\r) karakterlerini temizle
     HIGH_HIT_IPS=$($REDIS ZRANGEBYSCORE bs:ip_hits "$BAN_THRESHOLD" +inf 2>/dev/null | tr -d '\r')

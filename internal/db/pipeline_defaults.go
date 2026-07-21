@@ -65,16 +65,30 @@ func DefaultPipelineStages(siteID string) []PipelineStage {
 	})
 
 	geoipConfig, _ := json.Marshal(map[string]interface{}{
-		"database_path":       "/etc/badsector/geoip/GeoLite2-Country.mmdb",
-		"fail_open":           true,
-		"block_countries":     []interface{}{},
-		"allow_countries":     []interface{}{},
-		"allow_only":          false,
-		"use_header_fallback": true,
-		"deny_action":         "block",
-		"ban_threshold":       5,
-		"ban_ttl":             86400,
-		"pass_ttl":            3600,
+		"database_path":          "/etc/badsector/geoip/GeoLite2-Country.mmdb",
+		"fail_open":              true,
+		"block_countries":        []interface{}{},
+		"allow_countries":        []interface{}{},
+		"allow_only":             false,
+		"use_header_fallback":    true,
+		"deny_action":            "block",
+		"attack_deny_action":     "drop",
+		"attack_block_countries": []interface{}{},
+		"ban_threshold":          5,
+		"ban_ttl":                86400,
+		"pass_ttl":               3600,
+	})
+
+	asnConfig, _ := json.Marshal(map[string]interface{}{
+		"enabled":            true,
+		"database_path":      "/etc/badsector/geoip/GeoLite2-ASN.mmdb",
+		"block_asns":         []interface{}{},
+		"allow_asns":         []interface{}{},
+		"allow_only":         false,
+		"ip_map":             map[string]interface{}{},
+		"fail_open":          true,
+		"attack_deny_action": "drop",
+		"attack_block_asns":  []interface{}{},
 	})
 
 	customRulesConfig, _ := json.Marshal(map[string]interface{}{
@@ -88,11 +102,12 @@ func DefaultPipelineStages(siteID string) []PipelineStage {
 		{ID: NewID(), SiteID: siteID, Module: "trusted_bots", Order: 1, Enabled: true, Config: string(trustedBotsConfig)},
 		{ID: NewID(), SiteID: siteID, Module: "ip_reputation", Order: 2, Enabled: true, Config: string(ipRepConfig)},
 		{ID: NewID(), SiteID: siteID, Module: "geoip", Order: 3, Enabled: true, Config: string(geoipConfig)},
-		{ID: NewID(), SiteID: siteID, Module: "policies", Order: 4, Enabled: true, Config: `{"rules":[]}`},
-		{ID: NewID(), SiteID: siteID, Module: "rate_limiter", Order: 5, Enabled: true, Config: string(rateConfig)},
-		{ID: NewID(), SiteID: siteID, Module: "managed_waf", Order: 6, Enabled: false, Config: string(wafConfig)},
-		{ID: NewID(), SiteID: siteID, Module: "custom_rules", Order: 7, Enabled: false, Config: string(customRulesConfig)},
-		{ID: NewID(), SiteID: siteID, Module: reverseProxyModule, Order: 8, Enabled: true, Config: string(proxyConfig)},
+		{ID: NewID(), SiteID: siteID, Module: "asn", Order: 4, Enabled: false, Config: string(asnConfig)},
+		{ID: NewID(), SiteID: siteID, Module: "policies", Order: 5, Enabled: true, Config: `{"rules":[]}`},
+		{ID: NewID(), SiteID: siteID, Module: "rate_limiter", Order: 6, Enabled: true, Config: string(rateConfig)},
+		{ID: NewID(), SiteID: siteID, Module: "managed_waf", Order: 7, Enabled: false, Config: string(wafConfig)},
+		{ID: NewID(), SiteID: siteID, Module: "custom_rules", Order: 8, Enabled: false, Config: string(customRulesConfig)},
+		{ID: NewID(), SiteID: siteID, Module: reverseProxyModule, Order: 9, Enabled: true, Config: string(proxyConfig)},
 	}
 }
 

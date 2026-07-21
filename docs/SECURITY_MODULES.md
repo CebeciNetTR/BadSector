@@ -17,11 +17,16 @@ Country lookup via **GeoLite2-Country.mmdb** (worker auto-download). Optional he
 | `use_header_fallback` | Use `CF-IPCountry` / `X-Country-Code` if lookup fails |
 | `fail_open` | Continue if country unknown |
 | `deny_action` | `block` (403) \| `drop` (444) \| `challenge` (JS PoW). Default `block`. |
+| `attack_block_countries` | Attack modunda kernel block listesi → `ipset bs_attack_geo` (TLS/HAProxy öncesi). `allow_only` attack modunda kernel'e yansımaz. |
 | `ban_threshold` / `ban_ttl` | Challenge fail → ban (default 5 / 60s window, TTL 86400). Redis: `geoip_challenge` |
 
 Sets `ctx.vars.country` and `ctx.enrich.geo`. See [GEOIP.md](GEOIP.md).
 
 **`deny_action=challenge`:** TR (allow) serbest; yabancı PoW görür. Ayrı `js_challenge` modülü gerekmez. 60 sn içinde `ban_threshold` çözümsüz belge → ban. Statik asset sayılmaz.
+
+**Attack mode (kernel block list):** `bs:attack_mode=1` iken watcher yalnızca **açık block listesindeki** ülkeleri düşürür (`attack_block_countries` + `block_countries` → ipdeny CIDR → `ipset bs_attack_geo`). `allow_only` attack modunda devreye girmez — normal modda TR/challenge davranışı ayrı kalır. TR exempt (yanlışlıkla block listesine yazılsa bile kernel'de düşmez).
+
+Engine: attack modunda yine yalnızca block listesi uygulanır (allow_only atlanır); kaçan paketler için yedek.
 
 ## Custom Rules (`custom_rules`)
 
@@ -55,6 +60,8 @@ Resolves ASN from **GeoLite2-ASN.mmdb** with `ip_map` overrides. Supports block/
 | `block_asns` | Block requests from these ASN numbers |
 | `allow_asns` | Used with `allow_only: true` |
 | `allow_only` | If true, only ASNs in `allow_asns` may pass |
+| `attack_deny_action` | Engine yedek: attack modunda ASN red eylemi. |
+| `attack_block_asns` | Attack modunda kernel ban (hit≥1 + ASN eşleşmesi → `bs_banned`) + engine drop |
 | `database_path` | Path to ASN MMDB |
 | `ip_map` | Manual IP → ASN overrides |
 | `fail_open` | Continue if ASN unknown |

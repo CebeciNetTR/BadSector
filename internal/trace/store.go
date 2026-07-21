@@ -94,3 +94,48 @@ func (s *Store) SetAttackMode(enabled bool) error {
 	}
 	return s.client.Del(ctx, "bs:attack_mode").Err()
 }
+
+// SetAttackKernelPolicy writes watcher keys for kernel-level attack blocks (iptables/ipset).
+// countries = explicit block list only (attack_block_countries + block_countries); allow_only is NOT used.
+func (s *Store) SetAttackKernelPolicy(countries, asns, exemptCountries string) error {
+	ctx := context.Background()
+	pipe := s.client.Pipeline()
+	setOrDel := func(key, val string) {
+		if val == "" {
+			pipe.Del(ctx, key)
+		} else {
+			pipe.Set(ctx, key, val, 0)
+		}
+	}
+	setOrDel("bs:attack_kernel_countries", countries)
+	setOrDel("bs:attack_kernel_asns", asns)
+	setOrDel("bs:attack_kernel_exempt_countries", exemptCountries)
+	pipe.Del(ctx, "bs:attack_kernel_allow_only")
+	pipe.Del(ctx, "bs:attack_kernel_allow_countries")
+	_, err := pipe.Exec(ctx)
+	return err
+}
+
+func (s *Store) GetAttackKernelPolicy() (countries, asns, exemptCountries string, err error) {
+	ctx := context.Background()
+	countries, err = s.client.Get(ctx, "bs:attack_kernel_countries").Result()
+	if err == redis.Nil {
+		countries = ""
+		err = nil
+	} else if err != nil {
+		return
+	}
+	asns, err = s.client.Get(ctx, "bs:attack_kernel_asns").Result()
+	if err == redis.Nil {
+		asns = ""
+		err = nil
+	} else if err != nil {
+		return
+	}
+	exemptCountries, err = s.client.Get(ctx, "bs:attack_kernel_exempt_countries").Result()
+	if err == redis.Nil {
+		exemptCountries = ""
+		err = nil
+	}
+	return
+}

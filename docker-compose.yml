@@ -228,6 +228,17 @@ services:
       HIT_STALE_SEC: "600"        # 10dk+ gorulmeyen
       HIT_MIN_KEEP: "10"          # stale + hit<10 → bs:ip_hits prune
       BADSECTOR_TRUSTED_IPS: ${BADSECTOR_TRUSTED_IPS:-}
+      # Kernel attack geo (ipset CIDR) — Redis bs:attack_kernel_* yoksa fallback
+      ATTACK_KERNEL_COUNTRIES: ${ATTACK_KERNEL_COUNTRIES:-}
+      ATTACK_KERNEL_ASNS: ${ATTACK_KERNEL_ASNS:-}
+      ATTACK_KERNEL_ALLOW_COUNTRIES: ${ATTACK_KERNEL_ALLOW_COUNTRIES:-TR}
+      ATTACK_KERNEL_EXEMPT_COUNTRIES: ${ATTACK_KERNEL_EXEMPT_COUNTRIES:-TR}
+      BADSECTOR_ASN_MMDB: /etc/badsector/geoip/GeoLite2-ASN.mmdb
+      ATTACK_ASN_HIT_MIN: "1"
+      ATTACK_ASN_SCAN_LIMIT: "8000"
+    volumes:
+      - ./data/geoip:/etc/badsector/geoip:ro
+      - ./data/watcher:/var/lib/badsector
     depends_on:
       - redis
     logging:

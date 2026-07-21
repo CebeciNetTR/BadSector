@@ -1,7 +1,8 @@
 local decision = require("badsector.decision")
 local geoip_db = require("badsector.geoip_db")
+local attack_mode = require("badsector.attack_mode")
 
-local M = { name = "asn", version = "1.0.0" }
+local M = { name = "asn", version = "1.1.0" }
 
 local cfg = {
     enabled = true,
@@ -11,6 +12,9 @@ local cfg = {
     allow_only = false,
     ip_map = {},
     fail_open = true,
+    -- attack mode: block_asns / attack_block_asns icin varsayilan eylem (444 silent)
+    attack_deny_action = "drop",
+    attack_block_asns = {},
 }
 
 local asn_db = nil
@@ -28,6 +32,11 @@ function M.reload(config)
     cfg.allow_only = config.allow_only == true
     cfg.ip_map = config.ip_map or {}
     cfg.fail_open = config.fail_open ~= false
+    cfg.attack_deny_action = config.attack_deny_action or "drop"
+    if cfg.attack_deny_action ~= "drop" and cfg.attack_deny_action ~= "block" then
+        cfg.attack_deny_action = "drop"
+    end
+    cfg.attack_block_asns = config.attack_block_asns or {}
 
     geoip_db.close(asn_db)
     asn_db = nil
@@ -79,6 +88,16 @@ local function resolve_asn(ip)
     return lookup_mmdb(ip)
 end
 
+local function deny_asn(ctx, reason, use_attack_action)
+    local action = use_attack_action and cfg.attack_deny_action or "block"
+    if action == "drop" then
+        ctx:trace("asn", decision.RETURN_444, reason, { deny_action = "drop" })
+        return decision.RETURN_444
+    end
+    ctx:trace("asn", decision.BLOCK, reason, { deny_action = "block" })
+    return decision.block(403, "Access denied")
+end
+
 function M.run(ctx, config)
     if config then
         M.reload(config)
@@ -108,14 +127,18 @@ function M.run(ctx, config)
         ctx:trace("asn", decision.CONTINUE, "ASN unknown")
     end
 
+    local attack_on = attack_mode.is_on()
+
     if number and cfg.allow_only and not asn_in_list(number, cfg.allow_asns) then
-        ctx:trace("asn", decision.BLOCK, "ASN not on allow list: " .. tostring(number))
-        return decision.block(403, "Access denied")
+        return deny_asn(ctx, "ASN not on allow list: " .. tostring(number), attack_on)
     end
 
     if number and asn_in_list(number, cfg.block_asns) then
-        ctx:trace("asn", decision.BLOCK, "Blocked ASN: " .. tostring(number))
-        return decision.block(403, "Access denied")
+        return deny_asn(ctx, "Blocked ASN: " .. tostring(number), attack_on)
+    end
+
+    if attack_on and number and asn_in_list(number, cfg.attack_block_asns) then
+        return deny_asn(ctx, "Attack mode blocked ASN: " .. tostring(number), true)
     end
 
     return decision.CONTINUE

@@ -266,7 +266,9 @@ cd /opt/badsector && docker compose stop watcher   # geçici
 | HAProxy TLS reload | `docker compose restart haproxy` |
 | Smoke test | `./scripts/smoke-test.sh` |
 
-**TR-odaklı site önerisi:** GeoIP `allow_only` + `TR`; `trusted_bots` açık; attack mode normalde kapalı (acil durumda aç).
+**TR-odaklı site önerisi:** GeoIP `allow_only` + `TR` (normal mod); attack modunda **kernel block listesi** (ör. `CN, BR` → Edge Security → Attack mode kernel block). `trusted_bots` açık; attack mode acil durumda.
+
+**Attack kernel:** Yalnızca listelenen ülkeler DROP (`ipset bs_attack_geo`). Zone cache: `data/watcher/country-zones/`. Örnek `.env`: `ATTACK_KERNEL_COUNTRIES=CN,BR`
 
 ---
 

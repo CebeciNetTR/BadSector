@@ -143,6 +143,10 @@ func (h *Handler) updateModuleStage(c echo.Context, module string, defaultConfig
 		return echo.NewHTTPError(http.StatusInternalServerError, "runtime reload failed: "+err.Error())
 	}
 
+	if module == "geoip" || module == "asn" {
+		_ = h.refreshAttackKernelPolicy()
+	}
+
 	return c.JSON(http.StatusOK, moduleStageResponse{
 		Enabled: req.Enabled,
 		Config:  req.Config,
