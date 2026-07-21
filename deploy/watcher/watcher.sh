@@ -78,11 +78,12 @@ ban_ip() {
         log "SKIP ban (trusted): $ip"
         return
     fi
-    # iptables ipset'e ekle (zaten varsa hata verme)
-    if ipset add "$IPSET_NAME" "$ip" timeout "$BAN_TTL" 2>/dev/null; then
-        # Redis ban listesine de ekle (engine katmani icin)
+    # -exist onde: zaten listedeyse hata verme; Redis ban yine yenilenir
+    if ipset -exist add "$IPSET_NAME" "$ip" timeout "$BAN_TTL" 2>/dev/null; then
         $REDIS SETEX "bs:ban:$ip" "$BAN_TTL" "1" > /dev/null
         log "BANNED: $ip | iptables + Redis | TTL: ${BAN_TTL}s"
+    else
+        log "WARN: ipset add failed: $ip"
     fi
 }
 
@@ -106,6 +107,9 @@ sync_redis_bans_to_kernel() {
             fi
             ttl=$($REDIS TTL "$key" 2>/dev/null | tr -d '\r')
             [[ -z "$ttl" || "$ttl" -lt 1 ]] && ttl="$BAN_TTL"
+            if ipset test "$IPSET_NAME" "$ip" 2>/dev/null; then
+                continue
+            fi
             if ipset add "$IPSET_NAME" "$ip" timeout "$ttl" 2>/dev/null; then
                 added=$((added + 1))
             fi
