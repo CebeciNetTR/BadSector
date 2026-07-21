@@ -215,7 +215,8 @@ services:
 
   watcher:
     build:
-      context: ./deploy/watcher
+      context: .
+      dockerfile: deploy/watcher/Dockerfile
     restart: unless-stopped
     privileged: true
     network_mode: host

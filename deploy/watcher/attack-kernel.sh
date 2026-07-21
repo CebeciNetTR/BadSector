@@ -179,10 +179,10 @@ lookup_asn() {
     if [[ ! -f "$ASN_MMDB" ]]; then
         return 1
     fi
-    if ! command -v mmdblookup &>/dev/null; then
+    if [[ ! -x /usr/local/openresty/bin/resty ]]; then
         return 1
     fi
-    asn=$(mmdblookup --file "$ASN_MMDB" --ip "$ip" autonomous_system_number 2>/dev/null | grep -Eo '[0-9]+' | tail -1)
+    asn=$(BADSECTOR_ASN_MMDB="$ASN_MMDB" /usr/local/openresty/bin/resty /usr/local/bin/asn-lookup-one.lua "$ip" 2>/dev/null | tr -d '\r')
     [[ -n "$asn" ]] && echo "$asn"
 }
 
@@ -208,7 +208,7 @@ sync_attack_kernel_asn() {
     if [[ ! -f "$ASN_MMDB" ]]; then
         return
     fi
-    if ! command -v mmdblookup &>/dev/null; then
+    if [[ ! -x /usr/local/openresty/bin/resty ]]; then
         return
     fi
 
