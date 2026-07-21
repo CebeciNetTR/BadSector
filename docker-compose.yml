@@ -221,8 +221,8 @@ services:
     environment:
       BADSECTOR_REDIS_HOST: "127.0.0.1"
       BADSECTOR_REDIS_PORT: "6379"
-      BAN_THRESHOLD: "1000"       # kumulatif hit (gece sifirlanir) = iptables ban
-      CHECK_INTERVAL: "30"        # 30 saniyede bir kontrol
+      BAN_THRESHOLD: "300"        # attack altinda daha hizli iptables (eskiden 1000)
+      CHECK_INTERVAL: "15"        # daha sik ban/prune
       BAN_TTL: "7200"             # 2 saat ban (yanlis ban / SSH kilidi riskini dusurur)
       HIT_STALE_SEC: "600"        # 10dk+ gorulmeyen
       HIT_MIN_KEEP: "10"          # stale + hit<10 → bs:ip_hits prune

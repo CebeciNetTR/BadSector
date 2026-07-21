@@ -2,7 +2,7 @@
 #
 # Format:  <host>  <limit>
 #   <limit> pozitif tamsayi -> bu host icin 10 saniyelik pencerede istek esigi
-#                              (haritada olmayan hostlar icin varsayilan: 20)
+#                              (haritada olmayan hostlar icin varsayilan: 80)
 #   <limit> = -1            -> bu host HAProxy request-rate limitinden MUAF
 #                              (engine/site bazli rate-limit modulu devrede kalir)
 #

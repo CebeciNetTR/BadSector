@@ -27,6 +27,7 @@ All notable changes to BadSector are documented here.
 
 ### Added
 
+- **Attack-mode edge** — varsayılan rate **20→80**/10s (sayfa asset’leri 429 yemiyordu); abuse **429→silent-drop** + log silent; H2 streams 16; conn_cur 16; watcher `BAN_THRESHOLD=300` / `CHECK_INTERVAL=15`.
 - **Hit list prune** — `bs:ip_seen` last-seen; watcher `HIT_STALE_SEC=600` + `HIT_MIN_KEEP=10` ile stale/düşük istek IP’lerini `bs:ip_hits`’ten siler (günlük 18k birikimini keser). Yüksek hit / taze IP korunur.
 - **Backup / Restore** — Panel + `GET /backup` / `POST /backup/restore`: DB + TLS certs + optional `secrets.env`. Secrets: `keep` \| `rotate` \| `skip`. Scripts: `scripts/backup.sh`, `scripts/restore.sh`. ([BACKUP.md](docs/BACKUP.md))
 - **Trusted IPs** — `BADSECTOR_TRUSTED_IPS` (env, kodda sabit IP yok): iptables ACCEPT, watcher/HAProxy ban muaf, engine pipeline/GeoIP/challenge bypass. `scripts/clear-bans.sh` ile toplu ban temizliği.

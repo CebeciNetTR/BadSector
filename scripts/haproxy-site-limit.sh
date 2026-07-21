@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # BadSector - HAProxy site bazli request-rate esigini restart'siz degistir.
 #
-# HAProxy'nin request-rate limiti varsayilan olarak 20 istek/10s'dir (tum siteler
+# HAProxy'nin request-rate limiti varsayilan olarak 80 istek/10s'dir (tum siteler
 # icin ortak). Bu script, tek bir host icin bu esigi anlik olarak (admin socket
 # uzerinden, HAProxy restart etmeden) degistirir VE degisikligi diskteki map
 # dosyasina yazar (container yeniden baslasa/rebuild olsa da kaybolmaz).
@@ -9,7 +9,7 @@
 # Kullanim:
 #   bash scripts/haproxy-site-limit.sh set <host> <limit>     # ozel esik ata (orn: 500)
 #   bash scripts/haproxy-site-limit.sh unlimited <host>       # bu site icin limiti kapat (-1)
-#   bash scripts/haproxy-site-limit.sh clear <host>           # haritadan sil, varsayilan (20) esige don
+#   bash scripts/haproxy-site-limit.sh clear <host>           # haritadan sil, varsayilan (80) esige don
 #   bash scripts/haproxy-site-limit.sh list                   # canli haritayi goster
 #
 # Not: <host> tam olarak istemcinin gonderdigi Host header'iyla (kucuk harf) eslesmeli.
@@ -67,7 +67,7 @@ case "${ACTION}" in
     haproxy_exec "del map ${MAP_ID} ${HOST}" >/dev/null 2>&1 || true
     grep -v -E "^${HOST}[[:space:]]" "${MAP_FILE}" > "${MAP_FILE}.tmp" 2>/dev/null || true
     mv "${MAP_FILE}.tmp" "${MAP_FILE}"
-    echo "OK: ${HOST} haritadan silindi, varsayilan esige (20) dondu"
+    echo "OK: ${HOST} haritadan silindi, varsayilan esige (80) dondu"
     ;;
   list)
     haproxy_exec "show map ${MAP_ID}"
