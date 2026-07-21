@@ -6,6 +6,7 @@ RUN apk add --no-cache curl git unzip perl libmaxminddb \
 RUN mkdir -p /etc/badsector/coraza/rules /etc/badsector/runtime
 
 COPY lib/ /usr/local/openresty/badsector/lib/
+COPY scripts/ /etc/badsector/scripts/
 COPY conf/nginx.conf /usr/local/openresty/nginx/conf/nginx.conf
 COPY coraza/ /etc/badsector/coraza/
 

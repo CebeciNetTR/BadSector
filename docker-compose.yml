@@ -148,6 +148,7 @@ services:
     volumes:
       - runtime_config:/etc/badsector/runtime:ro
       - ./data/geoip:/etc/badsector/geoip:ro
+      - ./engine/scripts:/etc/badsector/scripts:ro
       - ./data/bots:/etc/badsector/bots:ro
       - ./data/challenge:/etc/badsector/challenge:ro
       - ./engine/coraza/rules:/etc/badsector/coraza/rules:ro

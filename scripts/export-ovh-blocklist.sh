@@ -9,8 +9,8 @@
 #   bash scripts/export-ovh-blocklist.sh --min-subnet 5 --top 30
 #   bash scripts/export-ovh-blocklist.sh --include-tr   # TR'yi de OVH listesine ekle (tavsiye edilmez)
 #
-# Gereksinim: data/geoip/GeoLite2-Country.mmdb
-#   python3 -m pip install maxminddb   VEYA   apt install maxminddb-tools
+# Gereksinim: data/geoip/GeoLite2-Country.mmdb (BadSector GeoIP ile AYNI dosya)
+# Lookup: engine konteyneri + badsector.geo_lookup (ek pip/mmdb kurulumu YOK)
 
 set -eu
 
@@ -48,7 +48,7 @@ done
 
 GEOIP_DB="${ROOT}/data/geoip/GeoLite2-Country.mmdb"
 if [[ ! -f "$GEOIP_DB" ]]; then
-  echo "HATA: $GEOIP_DB yok. bash scripts/download-geoip.sh" >&2
+  echo "HATA: $GEOIP_DB yok (BadSector GeoIP ile ayni). bash scripts/download-geoip.sh" >&2
   exit 1
 fi
 
@@ -56,6 +56,8 @@ COMPOSE=(docker compose)
 if ! docker info &>/dev/null 2>&1; then
   COMPOSE=(sudo docker compose)
 fi
+
+GEO_LOOKUP_SCRIPT="/etc/badsector/scripts/geoip-lookup-batch.lua"
 
 TMP=$(mktemp)
 GEO=$(mktemp)
@@ -86,21 +88,12 @@ if [[ "$COUNT" -eq 0 ]]; then
   exit 1
 fi
 
-echo "=== GeoIP lookup ($COUNT IP) ==="
-if ! python3 "${ROOT}/scripts/geoip-lookup-batch.py" "$GEOIP_DB" < "$TMP" > "$GEO" 2>/dev/null; then
-  if command -v mmdblookup &>/dev/null; then
-    : > "$GEO"
-    while IFS= read -r ip; do
-      cc=$(mmdblookup -f "$GEOIP_DB" --ip "$ip" country iso_code 2>/dev/null \
-        | awk -F'"' '/iso_code/ {print $2; exit}' | tr '[:lower:]' '[:upper:]')
-      [[ -z "$cc" ]] && cc="??"
-      printf '%s\t%s\n' "$ip" "$cc"
-    done < "$TMP" > "$GEO"
-  else
-    echo "HATA: python3 maxminddb veya mmdblookup gerekli:" >&2
-    echo "  pip install maxminddb   |   apt install maxminddb-tools" >&2
-    exit 1
-  fi
+echo "=== GeoIP lookup ($COUNT IP) — BadSector MMDB + engine geo_lookup ==="
+if ! "${COMPOSE[@]}" exec -T engine /usr/local/openresty/bin/resty "$GEO_LOOKUP_SCRIPT" < "$TMP" > "$GEO" 2>/dev/null; then
+  echo "HATA: engine uzerinden geo lookup basarisiz." >&2
+  echo "  docker compose up -d engine" >&2
+  echo "  ls -la engine/scripts/geoip-lookup-batch.lua data/geoip/GeoLite2-Country.mmdb" >&2
+  exit 1
 fi
 
 TS=$(date +%Y%m%d-%H%M%S)
