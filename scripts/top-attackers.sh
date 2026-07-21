@@ -46,6 +46,11 @@ is_trusted() {
 }
 
 # ipset: -exist KOMUTTAN ONCE olmali (sonda parse edilmez → "already in set" fail)
+# redis-cli'ye stdin verme — yoksa while-read borusunu yutar (tek IP banlanip durur)
+redis_cli() {
+  "${COMPOSE[@]}" exec -T redis redis-cli "$@" </dev/null 2>/dev/null || true
+}
+
 ban_one() {
   local ip="$1"
   local why="${2:-}"
@@ -57,9 +62,9 @@ ban_one() {
     return 0
   fi
   if ipset -exist add "$IPSET_NAME" "$ip" timeout "$BAN_TTL" 2>/dev/null; then
-    "${COMPOSE[@]}" exec -T redis redis-cli SETEX "bs:ban:$ip" "$BAN_TTL" "1" >/dev/null 2>&1 || true
-    "${COMPOSE[@]}" exec -T redis redis-cli ZREM bs:ip_hits "$ip" >/dev/null 2>&1 || true
-    "${COMPOSE[@]}" exec -T redis redis-cli ZREM bs:ip_seen "$ip" >/dev/null 2>&1 || true
+    redis_cli SETEX "bs:ban:$ip" "$BAN_TTL" "1" >/dev/null
+    redis_cli ZREM bs:ip_hits "$ip" >/dev/null
+    redis_cli ZREM bs:ip_seen "$ip" >/dev/null
     echo "BANNED ${why} $ip"
     return 0
   fi
@@ -124,18 +129,20 @@ ipset list bs_banned 2>/dev/null | awk '/Number of entries/ {print}' || echo "ip
 if [[ "$MODE" == "ban" ]]; then
   echo ""
   echo "=== BAN: stick-table conn>=3 (top ${N}) ==="
-  awk '$2 >= 3 { print $2, $3 }' "$TABLE_FILE" | sort -nr | head -n "$N" | while read -r conn ip; do
+  mapfile -t CONN_IPS < <(awk '$2 >= 3 { print $2, $3 }' "$TABLE_FILE" | sort -nr | head -n "$N")
+  for line in "${CONN_IPS[@]}"; do
+    conn="${line%% *}"
+    ip="${line##* }"
     ban_one "$ip" "conn=$conn" || true
   done
 
   echo ""
   echo "=== BAN: Redis bs:ip_hits top ${N} ==="
-  "${COMPOSE[@]}" exec -T redis redis-cli ZREVRANGE bs:ip_hits 0 $((N - 1)) 2>/dev/null | tr -d '\r' \
-    | while read -r ip; do
-        [[ -z "$ip" ]] && continue
-        # WITHSCORES yok — sadece member; cift satir skor degil
-        ban_one "$ip" "hits" || true
-      done
+  mapfile -t HIT_IPS < <("${COMPOSE[@]}" exec -T redis redis-cli ZREVRANGE bs:ip_hits 0 $((N - 1)) </dev/null 2>/dev/null | tr -d '\r')
+  for ip in "${HIT_IPS[@]}"; do
+    [[ -z "$ip" ]] && continue
+    ban_one "$ip" "hits" || true
+  done
 
   echo ""
   echo "=== ipset sonra ==="
