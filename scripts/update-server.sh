@@ -3,10 +3,8 @@
 #
 # Policy: all product changes land in git first; servers only pull + this script.
 #
-# Usage (on server):
-#   cd /opt/badsector && bash scripts/update-server.sh          # fast (default)
-#   cd /opt/badsector && bash scripts/update-server.sh --full   # slow: no-cache rebuild all
-#   cd /opt/badsector && bash scripts/update-server.sh --hard-reset  # discard local tracked diffs
+#   cd /opt/badsector && bash scripts/update-server.sh --services haproxy,watcher
+#       # load altinda: sadece bu ikisi (build cache + recreate)
 #
 # Git: normal updates use fast-forward merge (seconds). Hard reset only when --hard-reset
 #      or when ff-only fails (e.g. server-side edits to tracked files).
@@ -109,7 +107,12 @@ services_from_diff() {
   if git diff --name-only "${prev}" HEAD | grep -qE '^deploy/haproxy/'; then
     add haproxy
   fi
-  if git diff --name-only "${prev}" HEAD | grep -qE '^(docker-compose\.yml|scripts/compose\.sh)'; then
+  if git diff --name-only "${prev}" HEAD | grep -qE '^deploy/watcher/'; then
+    add watcher
+  fi
+  # compose.yml degisince tum stack'i rebuild etme — env/prune gibi
+  # degisiklikler hedef servisle --services verilir (load altinda guvenli).
+  if git diff --name-only "${prev}" HEAD | grep -qE '^scripts/compose\.sh'; then
     add haproxy
     add engine
     add api
@@ -118,7 +121,7 @@ services_from_diff() {
   fi
 
   if [[ ${#out[@]} -eq 0 ]]; then
-    out=(haproxy engine api worker ui)
+    out=(haproxy engine api worker ui watcher)
   fi
 
   printf '%s\n' "${out[@]}"
@@ -130,7 +133,7 @@ NEW_HEAD="$(git rev-parse HEAD)"
 
 if [[ ${#SERVICES[@]} -eq 0 ]]; then
   if [[ "${MODE}" == "full" ]]; then
-    SERVICES=(haproxy engine api worker ui)
+    SERVICES=(haproxy engine api worker ui watcher)
   elif [[ "${PREV_HEAD}" == "${NEW_HEAD}" ]]; then
     echo "==> No git changes — skipping rebuild (use --full to force)"
     SERVICES=()
@@ -154,7 +157,25 @@ else
   else
     compose build "${SERVICES[@]}"
   fi
-  compose up -d --build
+  # Sadece hedef servisleri recreate et (load altinda engine/api'ye dokunma).
+  # --no-deps: bagimli saglikli servisleri yeniden baslatma.
+  # watcher once (edge yok), haproxy sonra (kisa reconnect).
+  ordered=()
+  for s in watcher engine api worker ui haproxy; do
+    for t in "${SERVICES[@]}"; do
+      [[ "$t" == "$s" ]] && ordered+=("$s")
+    done
+  done
+  # listede olmayanlar sonda
+  for t in "${SERVICES[@]}"; do
+    skip=false
+    for o in "${ordered[@]}"; do [[ "$o" == "$t" ]] && skip=true && break; done
+    $skip || ordered+=("$t")
+  done
+  for s in "${ordered[@]}"; do
+    echo "    up -d --no-deps $s"
+    compose up -d --no-deps --no-build "$s"
+  done
 fi
 
 echo "==> Health"

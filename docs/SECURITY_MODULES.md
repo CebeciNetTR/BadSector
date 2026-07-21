@@ -173,9 +173,10 @@ Sets HttpOnly verification cookie on first visit; subsequent requests pass.
 To handle massive DDoS floods without exhausting OpenResty (engine) resources:
 
 1. **HAProxy Lua Ban Check** (`deploy/haproxy/lua/ban_check.lua`): Attack mode açıkken (`bs:attack_mode=1`) bellekteki ban tablosunu okur; banlı IP'leri `silent-drop` eder. Hit sayaçlarını arka planda Redis'e **pipeline batch** ile yazar (80k+ IP flood'da Redis'i boğmamak için).
-2. **IP Watcher** (`deploy/watcher`): `bs:ip_hits` sorted set'ini izler. Eşik aşılınca (`BAN_THRESHOLD`, varsayılan 1000 — kümülatif, gece sıfırlanır) IP'yi **host ipset** (`bs_banned`, `maxelem` 1M) + Redis `bs:ban:<ip>` ile banlar. Ban TTL: `BAN_TTL` (varsayılan 86400). `network_mode: host` + `privileged` — iptables host'a yazılır; konteyner dursa bile kural kalır (reboot temizler).
-3. **Daily Reset**: Gece 00:00'da hit sayaçları ve ipset flush. Redis kısa süre erişilemez olsa watcher **crash-loop yapmaz** (`set -e` yok).
-4. **Engine ban cache**: `init.lua` istek başına Redis GET yerine shared-dict negatif cache kullanır; `/badsector/health` Redis'e dokunmaz.
+2. **IP Watcher** (`deploy/watcher`): `bs:ip_hits` sorted set'ini izler. Eşik aşılınca (`BAN_THRESHOLD`, varsayılan 1000 — kümülatif, gece sıfırlanır) IP'yi **host ipset** (`bs_banned`, `maxelem` 1M) + Redis `bs:ban:<ip>` ile banlar. Ban TTL: `BAN_TTL` (compose varsayılan 7200). `network_mode: host` + `privileged` — iptables host'a yazılır; konteyner dursa bile kural kalır (reboot temizler).
+3. **Stale prune**: HAProxy flush her IP için `bs:ip_seen` (unix last-seen) yazar. Watcher her turda: `hit < HIT_MIN_KEEP` (10) **ve** son görülme `HIT_STALE_SEC` (600s) eskiyse veya `bs:ip_seen` yoksa → `ZREM`. Aktif / yüksek hit IP’ler kalır.
+4. **Daily Reset**: Gece 00:00'da `bs:ip_hits` + `bs:ip_seen` ve ipset flush. Redis kısa süre erişilemez olsa watcher **crash-loop yapmaz** (`set -e` yok).
+5. **Engine ban cache**: `init.lua` istek başına Redis GET yerine shared-dict negatif cache kullanır; `/badsector/health` Redis'e dokunmaz.
 
 ### Ban kaynağını teşhis
 

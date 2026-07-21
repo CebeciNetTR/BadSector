@@ -119,12 +119,12 @@ local function flush_hits(sock)
     _hits = {}
     _hits_n = 0
 
-    -- Pipeline: tek tek round-trip yerine komutlari batch halinde gonder, sonra
-    -- yanitlari topluca oku. 80k+ IP'de N round-trip'i N/BATCH'e dusurur; flood
-    -- altinda Redis'i ve Lua task'ini bogmaz (incident kok nedeni).
+    -- Pipeline: ZINCRBY bs:ip_hits + ZADD bs:ip_seen (son gorulme).
+    -- Watcher: 10dk+ stale VE dusuk hit → prune (gunluk 18k birikimi onler).
     local BATCH = 1000
     local buf = {}
     local pending = 0
+    local now = tostring(os.time())
 
     local function flush_batch()
         if pending == 0 then
@@ -139,18 +139,22 @@ local function flush_hits(sock)
         pending = 0
     end
 
+    local function enqueue(args)
+        buf[#buf + 1] = "*" .. #args .. "\r\n"
+        for _, a in ipairs(args) do
+            a = tostring(a)
+            buf[#buf + 1] = "$" .. #a .. "\r\n" .. a .. "\r\n"
+        end
+        pending = pending + 1
+        if pending >= BATCH then
+            flush_batch()
+        end
+    end
+
     for ip, count in pairs(snapshot) do
         if count > 0 then
-            local args = { "ZINCRBY", "bs:ip_hits", count, ip }
-            buf[#buf + 1] = "*" .. #args .. "\r\n"
-            for _, a in ipairs(args) do
-                a = tostring(a)
-                buf[#buf + 1] = "$" .. #a .. "\r\n" .. a .. "\r\n"
-            end
-            pending = pending + 1
-            if pending >= BATCH then
-                flush_batch()
-            end
+            enqueue({ "ZINCRBY", "bs:ip_hits", count, ip })
+            enqueue({ "ZADD", "bs:ip_seen", now, ip })
         end
     end
     flush_batch()

@@ -158,12 +158,14 @@ bash scripts/update-server.sh --full
 bash scripts/update-server.sh --hard-reset
 ```
 
-**Tek servis:**
+**Tek / dar servis (load altinda tercih et):**
 
 ```bash
-bash scripts/update-server.sh --services engine,api
+# Bu prune degisikligi icin — sadece haproxy + watcher; engine/api dokunulmaz
+bash scripts/update-server.sh --services watcher,haproxy
 ```
 
+Build image’ler ayakta container’larla paralel biter; sonra `--no-deps` ile yalnızca hedefler recreate olur. Watcher önce (ipset kalır), haproxy kısa reconnect.
 Manuel güncelleme (eski, yavaş yol — gerek yok):
 
 ```bash

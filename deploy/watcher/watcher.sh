@@ -3,6 +3,7 @@
 # Redis'teki bs:ip_hits sorted set'ini izler.
 # Esigi asan IP'leri iptables (ipset) + Redis ile banlar.
 # Gece 00:00'da hit sayaclarini ve ipset'i temizler.
+# Stale prune: 10dk+ gormeyen VE hit < HIT_MIN_KEEP → listeden dusur.
 #
 # NOT: Bilincli olarak "set -e" KULLANMIYORUZ. Bu uzun-omurlu bir daemon;
 # Redis bir an erisilemez oldugunda (flood/restart) tek bir komut hatasi tum
@@ -13,6 +14,8 @@ REDIS_PORT="${BADSECTOR_REDIS_PORT:-6379}"
 BAN_THRESHOLD="${BAN_THRESHOLD:-1000}"      # Bu kadar hit = ban
 CHECK_INTERVAL="${CHECK_INTERVAL:-30}"      # Saniyede bir kontrol
 BAN_TTL="${BAN_TTL:-86400}"                 # Ban suresi (saniye) - varsayilan 24 saat
+HIT_STALE_SEC="${HIT_STALE_SEC:-600}"       # Son gorulme bundan eskiyse "stale"
+HIT_MIN_KEEP="${HIT_MIN_KEEP:-10}"          # Stale + hit < bu → prune
 IPSET_NAME="bs_banned"
 # Virgul ile: asla banlanmaz + iptables ACCEPT. Bos = kimse muaf degil.
 TRUSTED_IPS="${BADSECTOR_TRUSTED_IPS:-}"
@@ -83,12 +86,38 @@ ban_ip() {
     fi
 }
 
+# Dusuk hit + uzun suredir gorulmeyen IP'leri bs:ip_hits / bs:ip_seen'den sil.
+# Aktif saldiri (yuksek hit veya taze seen) dokunulmaz. Redis EVAL — 18k IP'de ucuz.
+prune_stale_hits() {
+    local now cutoff removed
+    now=$(date +%s)
+    cutoff=$((now - HIT_STALE_SEC))
+    removed=$($REDIS EVAL "
+local cutoff = tonumber(ARGV[1])
+local min_keep = tonumber(ARGV[2])
+local removed = 0
+local low = redis.call('ZRANGEBYSCORE', 'bs:ip_hits', '-inf', min_keep - 1)
+for _, ip in ipairs(low) do
+  local seen = redis.call('ZSCORE', 'bs:ip_seen', ip)
+  if (not seen) or (tonumber(seen) <= cutoff) then
+    redis.call('ZREM', 'bs:ip_hits', ip)
+    redis.call('ZREM', 'bs:ip_seen', ip)
+    removed = removed + 1
+  end
+end
+return removed
+" 0 "$cutoff" "$HIT_MIN_KEEP" 2>/dev/null | tr -d '\r')
+    if [[ -n "$removed" && "$removed" =~ ^[0-9]+$ && "$removed" -gt 0 ]]; then
+        log "PRUNE: removed $removed stale low-hit IPs (stale>${HIT_STALE_SEC}s hit<${HIT_MIN_KEEP})"
+    fi
+}
+
 daily_reset() {
     log "=== Gunluk temizlik basliyor ==="
 
     # Hit sayaclarini sifirla
-    $REDIS DEL bs:ip_hits > /dev/null
-    log "Redis bs:ip_hits sifirlandi"
+    $REDIS DEL bs:ip_hits bs:ip_seen > /dev/null
+    log "Redis bs:ip_hits + bs:ip_seen sifirlandi"
 
     # ipset'i temizle (yeni olustur)
     ipset flush "$IPSET_NAME" 2>/dev/null && log "ipset '$IPSET_NAME' temizlendi"
@@ -102,7 +131,8 @@ daily_reset() {
 last_reset_day=""
 
 log "BadSector IP Watcher baslatildi"
-log "Esik: $BAN_THRESHOLD hit | Kontrol suresi: ${CHECK_INTERVAL}s | Ban TTL: ${BAN_TTL}s"
+log "Esik: $BAN_THRESHOLD hit | Kontrol: ${CHECK_INTERVAL}s | Ban TTL: ${BAN_TTL}s"
+log "Prune: stale>${HIT_STALE_SEC}s AND hit<${HIT_MIN_KEEP}"
 log "Trusted IPs: $TRUSTED_IPS"
 
 setup_ipset
@@ -118,6 +148,8 @@ while true; do
         last_reset_day="$current_day"
     fi
 
+    prune_stale_hits
+
     # Esigi asan IP'leri al ve satır sonu (\r) karakterlerini temizle
     HIGH_HIT_IPS=$($REDIS ZRANGEBYSCORE bs:ip_hits "$BAN_THRESHOLD" +inf 2>/dev/null | tr -d '\r')
 
@@ -131,6 +163,7 @@ while true; do
         if [[ "$ip" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]] || [[ "$ip" =~ : ]]; then
             ban_ip "$ip"
             $REDIS ZREM bs:ip_hits "$ip" > /dev/null
+            $REDIS ZREM bs:ip_seen "$ip" > /dev/null
         fi
     done <<< "$HIGH_HIT_IPS"
 done
