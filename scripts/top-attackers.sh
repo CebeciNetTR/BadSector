@@ -1,15 +1,13 @@
 #!/usr/bin/env bash
-# BadSector — en gurultulu IP'leri goster (OVH firewall icin).
-#
-# ONEMLI: ipset (kernel) banli IP paketleri HAProxy'ye ULASMAZ → hit sayilmaz.
-# rate=0 + conn>0 = tipik TLS/handshake flood (HTTP yok, baglanti tutuyor).
+# BadSector — en gurultulu IP'leri goster / banla (OVH + ipset).
 #
 # Kullanim:
 #   bash scripts/top-attackers.sh           # ozet
-#   bash scripts/top-attackers.sh 30        # top N
-#   bash scripts/top-attackers.sh 200 ban   # conn + Redis top → ipset (trusted haric)
+#   bash scripts/top-attackers.sh 30
+#   bash scripts/top-attackers.sh 200 ban
 
-set -euo pipefail
+set -eu
+# pipefail YOK: head|sort SIGPIPE script'i oldurmesin
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
@@ -45,9 +43,8 @@ is_trusted() {
   return 1
 }
 
-# ipset: -exist KOMUTTAN ONCE olmali (sonda parse edilmez → "already in set" fail)
-# redis-cli'ye stdin verme — yoksa while-read borusunu yutar (tek IP banlanip durur)
 redis_cli() {
+  # stdin'i yutma (while-read / mapfile bozulmasin)
   "${COMPOSE[@]}" exec -T redis redis-cli "$@" </dev/null 2>/dev/null || true
 }
 
@@ -58,7 +55,7 @@ ban_one() {
     echo "SKIP trusted $ip"
     return 0
   fi
-  if [[ ! "$ip" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]] && [[ ! "$ip" =~ : ]]; then
+  if [[ ! "$ip" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
     return 0
   fi
   if ipset -exist add "$IPSET_NAME" "$ip" timeout "$BAN_TTL" 2>/dev/null; then
@@ -66,10 +63,9 @@ ban_one() {
     redis_cli ZREM bs:ip_hits "$ip" >/dev/null
     redis_cli ZREM bs:ip_seen "$ip" >/dev/null
     echo "BANNED ${why} $ip"
-    return 0
+  else
+    echo "FAIL ipset $ip"
   fi
-  echo "FAIL $ip"
-  return 1
 }
 
 parse_table() {
@@ -82,67 +78,68 @@ parse_table() {
   '
 }
 
-# Stick-table bir kez (ban + gosterim ayni snapshot)
 TABLE_FILE=$(mktemp)
-trap 'rm -f "$TABLE_FILE"' EXIT
+HIT_FILE=$(mktemp)
+CONN_FILE=$(mktemp)
+trap 'rm -f "$TABLE_FILE" "$HIT_FILE" "$CONN_FILE"' EXIT
+
 parse_table > "$TABLE_FILE" || true
 
-echo "=== Redis bs:ip_hits (ban oncesi kumulatif) top ${N} ==="
-"${COMPOSE[@]}" exec -T redis redis-cli ZREVRANGE bs:ip_hits 0 $((N - 1)) WITHSCORES 2>/dev/null | tr -d '\r' || true
+echo "=== Redis bs:ip_hits top ${N} ==="
+redis_cli ZREVRANGE bs:ip_hits 0 $((N - 1)) WITHSCORES | tr -d '\r' || true
 
 echo ""
-echo "=== TLS flood adaylari: conn_cur yuksek, rate dusuk (OVH oncelik) ==="
+echo "=== TLS flood adaylari (conn yuksek, rate dusuk) ==="
 awk '$2 >= 3 { print $2, $1, $3 }' "$TABLE_FILE" | sort -nr -k1,1 | head -n "$N" \
-  | awk '{printf "conn=%s rate=%s/10s  %s\n", $1, $2, $3}'
+  | awk '{printf "conn=%s rate=%s/10s  %s\n", $1, $2, $3}' || true
 
 echo ""
-echo "=== HTTP rate yuksek (gercek istek flood) ==="
-HTTP_N=$(awk '$1 > 0 { c++ } END { print c+0 }' "$TABLE_FILE")
-if [[ "$HTTP_N" -eq 0 ]]; then
-  echo "(yok — trafik HTTP'ye zor ulasiyor; TLS asamasinda)"
-else
-  awk '$1 > 0 { print $1, $2, $3 }' "$TABLE_FILE" | sort -nr -k1,1 | head -n "$N" \
-    | awk '{printf "rate=%s/10s conn=%s  %s\n", $1, $2, $3}'
+echo "=== HTTP rate yuksek ==="
+if ! awk '$1 > 0 { found=1; print $1, $2, $3 }' "$TABLE_FILE" | sort -nr -k1,1 | head -n "$N" \
+  | awk '{printf "rate=%s/10s conn=%s  %s\n", $1, $2, $3}'; then
+  :
 fi
-
-echo ""
-echo "=== Host :443 established (ss) top ${N} ==="
-if command -v ss >/dev/null 2>&1; then
-  ss -tn state established '( sport = :443 or dport = :443 )' 2>/dev/null \
-    | awk 'NR>1 {
-        n=split($NF, a, ":")
-        ip=a[1]
-        if (ip ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/) c[ip]++
-      }
-      END { for (i in c) print c[i], i }' \
-    | sort -nr \
-    | head -n "$N" \
-    | awk '{printf "estab=%s  %s\n", $1, $2}'
+if ! awk '$1 > 0 { exit 1 }' "$TABLE_FILE"; then
+  :
 else
-  echo "(ss yok)"
+  echo "(yok — TLS asamasinda)"
 fi
 
 echo ""
 echo "=== ipset ==="
 ipset list bs_banned 2>/dev/null | awk '/Number of entries/ {print}' || echo "ipset yok"
 
-if [[ "$MODE" == "ban" ]]; then
+# ss flood'da takilabilir — sadece ozet modda, kisa timeout
+if [[ "$MODE" != "ban" ]] && command -v timeout >/dev/null 2>&1; then
   echo ""
-  echo "=== BAN: stick-table conn>=3 (top ${N}) ==="
-  mapfile -t CONN_IPS < <(awk '$2 >= 3 { print $2, $3 }' "$TABLE_FILE" | sort -nr | head -n "$N")
-  for line in "${CONN_IPS[@]}"; do
-    conn="${line%% *}"
-    ip="${line##* }"
-    ban_one "$ip" "conn=$conn" || true
-  done
+  echo "=== Host :443 established (ss, 3s timeout) ==="
+  timeout 3 ss -tn state established '( sport = :443 or dport = :443 )' 2>/dev/null \
+    | awk 'NR>1 {
+        n=split($NF, a, ":"); ip=a[1]
+        if (ip ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/) c[ip]++
+      }
+      END { for (i in c) print c[i], i }' \
+    | sort -nr | head -n "$N" \
+    | awk '{printf "estab=%s  %s\n", $1, $2}' || echo "(ss timeout/skip)"
+fi
+
+if [[ "$MODE" == "ban" ]]; then
+  awk '$2 >= 3 { print $3 }' "$TABLE_FILE" | sort -u | head -n "$N" > "$CONN_FILE" || true
+  redis_cli ZREVRANGE bs:ip_hits 0 $((N - 1)) | tr -d '\r' > "$HIT_FILE" || true
 
   echo ""
-  echo "=== BAN: Redis bs:ip_hits top ${N} ==="
-  mapfile -t HIT_IPS < <("${COMPOSE[@]}" exec -T redis redis-cli ZREVRANGE bs:ip_hits 0 $((N - 1)) </dev/null 2>/dev/null | tr -d '\r')
-  for ip in "${HIT_IPS[@]}"; do
+  echo "=== BAN stick-table ($(wc -l < "$CONN_FILE") IP) ==="
+  while IFS= read -r ip || [[ -n "${ip:-}" ]]; do
+    [[ -z "$ip" ]] && continue
+    ban_one "$ip" "conn" || true
+  done < "$CONN_FILE"
+
+  echo ""
+  echo "=== BAN redis hits ($(wc -l < "$HIT_FILE") IP) ==="
+  while IFS= read -r ip || [[ -n "${ip:-}" ]]; do
     [[ -z "$ip" ]] && continue
     ban_one "$ip" "hits" || true
-  done
+  done < "$HIT_FILE"
 
   echo ""
   echo "=== ipset sonra ==="
@@ -150,6 +147,4 @@ if [[ "$MODE" == "ban" ]]; then
 fi
 
 echo ""
-echo "Watcher esik kontrol: docker compose exec watcher printenv BAN_THRESHOLD"
-echo "300 olmali; 1000 ise: docker compose up -d --force-recreate watcher"
-echo "Toplu: bash scripts/top-attackers.sh 200 ban"
+echo "OK. Toplu ban: bash scripts/top-attackers.sh 200 ban"
