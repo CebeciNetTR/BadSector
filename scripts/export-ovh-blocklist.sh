@@ -1,23 +1,20 @@
 #!/usr/bin/env bash
-# BadSector — OVH Network Firewall icin IP/CIDR listesi (GeoIP: TR haric).
+# BadSector — OVH Edge Firewall: top saldirgan IP (tek tek, subnet YOK).
 #
-# Varsayilan: sadece geo != TR olanlar OVH export'una girer.
-# TR IP'ler ayri dosyada + ozet logda gorunur (OVH'ye koyma).
+# OVH paneli /24 kabul etmez; max ~20 kural. non-TR + bs:ip_hits siralamasina gore top N.
+# GeoIP: BadSector ile ayni MMDB + engine geo_lookup.
 #
-# Kullanim (sunucu, root/sudo):
-#   bash scripts/export-ovh-blocklist.sh
-#   bash scripts/export-ovh-blocklist.sh --min-subnet 5 --top 30
-#   bash scripts/export-ovh-blocklist.sh --include-tr   # TR'yi de OVH listesine ekle (tavsiye edilmez)
-#
-# Gereksinim: data/geoip/GeoLite2-Country.mmdb (BadSector GeoIP ile AYNI dosya)
-# Lookup: engine konteyneri + badsector.geo_lookup (ek pip/mmdb kurulumu YOK)
+# Kullanim:
+#   bash scripts/export-ovh-blocklist.sh              # top 20 non-TR (OVH icin)
+#   bash scripts/export-ovh-blocklist.sh --ovh-top 15
+#   bash scripts/export-ovh-blocklist.sh --top 100    # uzun rapor dosyasi
 
 set -eu
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
-MIN_SUBNET=3
+OVH_TOP=20
 TOP_SINGLE=50
 FROM_IPSET=true
 FROM_REDIS=true
@@ -25,11 +22,13 @@ FROM_HITS=true
 OUT_DIR="/tmp"
 KEEP_COUNTRY="TR"
 ONLY_NON_TR=true
+WITH_SUBNETS=false
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --min-subnet) MIN_SUBNET="$2"; shift 2 ;;
+    --ovh-top) OVH_TOP="$2"; shift 2 ;;
     --top) TOP_SINGLE="$2"; shift 2 ;;
+    --subnets) WITH_SUBNETS=true; shift ;;
     --from-ipset) FROM_IPSET=true; shift ;;
     --no-ipset) FROM_IPSET=false; shift ;;
     --from-redis) FROM_REDIS=true; shift ;;
@@ -39,7 +38,9 @@ while [[ $# -gt 0 ]]; do
     --include-tr) ONLY_NON_TR=false; shift ;;
     --keep-country) KEEP_COUNTRY="$2"; shift 2 ;;
     -h|--help)
-      sed -n '2,18p' "$0"
+      sed -n '2,14p' "$0"
+      echo "  --ovh-top N   OVH panele eklenecek tekil IP (varsayilan 20)"
+      echo "  --subnets     /24 rapor dosyasi da uret (panel icin degil)"
       exit 0
       ;;
     *) echo "Unknown: $1" >&2; exit 1 ;;
@@ -48,7 +49,7 @@ done
 
 GEOIP_DB="${ROOT}/data/geoip/GeoLite2-Country.mmdb"
 if [[ ! -f "$GEOIP_DB" ]]; then
-  echo "HATA: $GEOIP_DB yok (BadSector GeoIP ile ayni). bash scripts/download-geoip.sh" >&2
+  echo "HATA: $GEOIP_DB yok. bash scripts/download-geoip.sh" >&2
   exit 1
 fi
 
@@ -61,7 +62,8 @@ GEO_LOOKUP_SCRIPT="/etc/badsector/scripts/geoip-lookup-batch.lua"
 
 TMP=$(mktemp)
 GEO=$(mktemp)
-trap 'rm -f "$TMP" "$GEO"' EXIT
+HITS=$(mktemp)
+trap 'rm -f "$TMP" "$GEO" "$HITS"' EXIT
 
 collect_ip() {
   grep -E '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$' || true
@@ -77,144 +79,110 @@ if $FROM_REDIS; then
 fi
 
 if $FROM_HITS; then
-  "${COMPOSE[@]}" exec -T redis redis-cli ZREVRANGE bs:ip_hits 0 499 </dev/null 2>/dev/null \
+  "${COMPOSE[@]}" exec -T redis redis-cli ZREVRANGE bs:ip_hits 0 999 </dev/null 2>/dev/null \
     | collect_ip >> "$TMP" || true
 fi
 
 sort -u "$TMP" -o "$TMP"
 COUNT=$(wc -l < "$TMP" | tr -d ' ')
 if [[ "$COUNT" -eq 0 ]]; then
-  echo "IP bulunamadi (ipset/redis bos veya docker yetkisi yok)" >&2
+  echo "IP bulunamadi" >&2
   exit 1
 fi
 
-echo "=== GeoIP lookup ($COUNT IP) — BadSector MMDB + engine geo_lookup ==="
+echo "=== GeoIP lookup ($COUNT IP) — BadSector MMDB ==="
 if ! "${COMPOSE[@]}" exec -T engine /usr/local/openresty/bin/resty "$GEO_LOOKUP_SCRIPT" < "$TMP" > "$GEO" 2>/dev/null; then
-  echo "HATA: engine uzerinden geo lookup basarisiz." >&2
-  echo "  docker compose up -d engine" >&2
-  echo "  ls -la engine/scripts/geoip-lookup-batch.lua data/geoip/GeoLite2-Country.mmdb" >&2
+  echo "HATA: engine geo lookup basarisiz (docker compose up -d engine)" >&2
   exit 1
 fi
+
+# bs:ip_hits skorlari (istek sayaci)
+"${COMPOSE[@]}" exec -T redis redis-cli ZREVRANGE bs:ip_hits 0 -1 WITHSCORES </dev/null 2>/dev/null \
+  | tr -d '\r' > "$HITS" || true
 
 TS=$(date +%Y%m%d-%H%M%S)
-ALL="${OUT_DIR}/ovh-blocklist-all-${TS}.txt"
 GEO_ALL="${OUT_DIR}/ovh-blocklist-geo-${TS}.txt"
 TR_LIST="${OUT_DIR}/ovh-blocklist-TR-${TS}.txt"
-NONTR_LIST="${OUT_DIR}/ovh-blocklist-non-TR-${TS}.txt"
-SUBNETS="${OUT_DIR}/ovh-blocklist-subnets-non-TR-${TS}.txt"
-TOP="${OUT_DIR}/ovh-blocklist-top-non-TR-${TS}.txt"
-OVH_RULES="${OUT_DIR}/ovh-firewall-hints-${TS}.txt"
+OVH_IPS="${OUT_DIR}/ovh-top-ips-${TS}.txt"
+OVH_DETAIL="${OUT_DIR}/ovh-top-ips-${TS}.detail.txt"
+TOP_REPORT="${OUT_DIR}/ovh-top-report-${TS}.txt"
 
-cp "$TMP" "$ALL"
-
-# ip + cc dosyalari
 : > "$GEO_ALL"
 : > "$TR_LIST"
-: > "$NONTR_LIST"
 while IFS=$'\t' read -r ip cc; do
   [[ -z "$ip" ]] && continue
   cc="${cc^^}"
   [[ -z "$cc" ]] && cc="??"
   echo "$ip $cc" >> "$GEO_ALL"
-  if [[ "$cc" == "$KEEP_COUNTRY" ]]; then
-    echo "$ip" >> "$TR_LIST"
-  else
-    echo "$ip" >> "$NONTR_LIST"
-  fi
+  [[ "$cc" == "$KEEP_COUNTRY" ]] && echo "$ip" >> "$TR_LIST"
 done < "$GEO"
 
 TR_COUNT=$(wc -l < "$TR_LIST" 2>/dev/null | tr -d ' ' || echo 0)
-NONTR_COUNT=$(wc -l < "$NONTR_LIST" 2>/dev/null | tr -d ' ' || echo 0)
+
+# non-TR + hit skoruna gore sirala → OVH top N
+awk -v keep="$KEEP_COUNTRY" -v only_nontr="$ONLY_NON_TR" '
+  NR==FNR {
+    if (NR % 2 == 1) { hold=$1; next }
+    hits[hold]=$1+0
+    next
+  }
+  { geo[$1]=$2 }
+  END {
+    for (ip in geo) {
+      cc=geo[ip]
+      if (only_nontr == "true" && cc == keep) next
+      sc=(ip in hits) ? hits[ip] : 0
+      printf "%d\t%s\t%s\n", sc, ip, cc
+    }
+  }
+' "$HITS" "$GEO_ALL" | sort -t$'\t' -k1,1rn > "$OVH_DETAIL"
+
+head -n "$OVH_TOP" "$OVH_DETAIL" | awk -F'\t' '{print $2}' > "$OVH_IPS"
+head -n "$TOP_SINGLE" "$OVH_DETAIL" > "$TOP_REPORT"
 
 echo ""
-echo "=== Ulke ozeti (top 15) ==="
-awk '{print $2}' "$GEO_ALL" | sort | uniq -c | sort -rn | head -15 \
+echo "=== Ulke ozeti (top 10) ==="
+awk '{print $2}' "$GEO_ALL" | sort | uniq -c | sort -rn | head -10 \
   | awk '{printf "  geo=%s  %s IP\n", $2, $1}'
 
 echo ""
-echo "=== TR (OVH'ye KOYMA — $TR_COUNT IP) ==="
-if [[ "$TR_COUNT" -gt 0 ]]; then
-  awk '$2=="TR" {printf "  geo=TR  %s\n", $1}' "$GEO_ALL" | head -20
-  if [[ "$TR_COUNT" -gt 20 ]]; then
-    echo "  ... +$((TR_COUNT - 20)) daha → $TR_LIST"
-  fi
-else
-  echo "  (yok)"
-fi
+echo "=== geo=TR — OVH'ye KOYMA ($TR_COUNT IP) ==="
+awk '$2=="TR" {printf "  geo=TR  %s\n", $1}' "$GEO_ALL" | head -10
+[[ "$TR_COUNT" -gt 10 ]] && echo "  ... → $TR_LIST"
 
 echo ""
-echo "=== non-TR OVH adaylari ($NONTR_COUNT IP) ==="
+echo "=== OVH top $OVH_TOP (tek IP, hit sirasi, non-TR) ==="
+awk -F'\t' '{printf "  hits=%s  %s  geo=%s\n", $1, $2, $3}' "$OVH_DETAIL" | head -n "$OVH_TOP"
 
-EXPORT_SRC="$NONTR_LIST"
-if ! $ONLY_NON_TR; then
-  EXPORT_SRC="$ALL"
-  echo "  (--include-tr: tum IP'ler export'ta)"
-fi
+echo ""
+echo "=== OVH panele kopyala (her biri ayri kural) ==="
+echo "  Mode: Refuse | Protocol: TCP | Dest port: 443 | Source IP: <asagidaki>"
+echo "  TCP status: None"
+awk -F'\t' -v n="$OVH_TOP" 'NR<=n {printf "  %2d. %s   (hits=%s geo=%s)\n", NR, $2, $1, $3}' "$OVH_DETAIL"
 
-# /24: GEO_ALL uzerinden; subnet icinde geo=TR varsa SKIP; yoksa non-TR sayisi >= min
-awk -v min="$MIN_SUBNET" '
-  {
-    ip=$1; cc=$2; if (cc=="") cc="??"
-    split(ip,a,"."); s=a[1]"."a[2]"."a[3]".0/24"
-    n[s]++
-    if (cc=="TR") { tr[s]++ } else { nontr[s]++ }
-    c[s SUBSEP cc]++
-  }
-  END {
-    for (s in n) {
-      if (tr[s] > 0) {
-        printf "# SKIP %s (%d IP) — icinde %d geo=TR\n", s, n[s], tr[s]
-        continue
-      }
-      if (nontr[s] < min) continue
-      tops=""
-      for (k in c) {
-        split(k, p, SUBSEP); if (p[1]!=s) continue
-        tops = tops p[2] ":" c[k] " "
-      }
-      printf "%07d %s (%d IP) geo=%s\n", nontr[s], s, nontr[s], tops
+echo ""
+echo "=== Dosyalar ==="
+echo "  OVH tek IP listesi:  $OVH_IPS"
+echo "  Detay (hit+geo):     $OVH_DETAIL"
+echo "  Tum IP+geo:          $GEO_ALL"
+echo "  geo=TR:              $TR_LIST"
+
+if $WITH_SUBNETS; then
+  SUBNETS="${OUT_DIR}/ovh-subnets-${TS}.txt"
+  awk -v min=3 '
+    { ip=$1; cc=$2; split(ip,a,"."); s=a[1]"."a[2]"."a[3]".0/24"
+      if (cc=="TR") tr[s]++; else { nontr[s]++; nh[s SUBSEP ip]=1 }
     }
-  }
-' "$GEO_ALL" | sort -rn | sed 's/^[0-9]* //' > "$SUBNETS"
-
-# Top tekil: non-TR listesinden (alfabetik degil — ipset/redis sirasi)
-head -n "$TOP_SINGLE" "$EXPORT_SRC" | while read -r ip; do
-  cc=$(awk -v ip="$ip" '$1==ip {print $2; exit}' "$GEO_ALL")
-  echo "$ip geo=$cc"
-done > "$TOP"
-
-{
-  echo "# BadSector OVH Network Firewall — $(date -u +%Y-%m-%dT%H:%M:%SZ)"
-  echo "# Toplam IP: $COUNT | geo=$KEEP_COUNTRY: $TR_COUNT (OVH'ye ekleme) | non-$KEEP_COUNTRY: $NONTR_COUNT"
-  echo "#"
-  echo "# OVH: IP → Network Firewall → Deny TCP 443 (source CIDR)"
-  echo "# Sadece non-$KEEP_COUNTRY subnet'ler (TR iceren /24 atlandi)"
-  echo "#"
-  echo "# --- /24 non-$KEEP_COUNTRY (min $MIN_SUBNET IP, TR yok) ---"
-  grep -v '^#' "$SUBNETS" || true
-  echo "#"
-  echo "# --- Atlanan (subnet icinde TR) ---"
-  grep '^# SKIP' "$SUBNETS" || echo "# (yok)"
-  echo "#"
-  echo "# --- Top $TOP_SINGLE tekil non-$KEEP_COUNTRY ---"
-  cat "$TOP"
-  echo "#"
-  echo "# --- geo=TR ornek (banlama) ---"
-  awk '$2=="TR" || $2=="tr" {print "geo=TR", $1}' "$GEO_ALL" | head -30
-} > "$OVH_RULES"
+    END {
+      for (s in nontr) {
+        if (tr[s]>0) next
+        if (nontr[s]<min) next
+        print s, "(" nontr[s] " IP)"
+      }
+    }
+  ' "$GEO_ALL" | sort -k2 -rn > "$SUBNETS"
+  echo "  Subnet rapor:        $SUBNETS"
+fi
 
 echo ""
-echo "=== Top subnet (non-TR, OVH icin — ilk 10) ==="
-grep -v '^#' "$SUBNETS" | head -10 || echo "  (yok — min-subnet=$MIN_SUBNET artir: --min-subnet 3)"
-
-echo ""
-echo "=== Export tamam ==="
-echo "  Tum IP + geo:          $GEO_ALL"
-echo "  geo=$KEEP_COUNTRY (OVH disi):       $TR_LIST ($TR_COUNT)"
-echo "  non-$KEEP_COUNTRY OVH:             $NONTR_LIST ($NONTR_COUNT)"
-echo "  Subnet non-$KEEP_COUNTRY:          $SUBNETS"
-echo "  Top non-$KEEP_COUNTRY:             $TOP"
-echo "  Panel notlari:         $OVH_RULES"
-echo ""
-echo "OVH'ye ekle (ilk subnet'ler):"
-grep -v '^#' "$SUBNETS" | head -10 | awk '{print "  Deny TCP 443 from", $1}'
+echo "Sunucuda zaten ipset var — OVH kurallari edge katmani (TLS oncesi ek koruma)."
