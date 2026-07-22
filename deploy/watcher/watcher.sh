@@ -14,8 +14,10 @@ REDIS_PORT="${BADSECTOR_REDIS_PORT:-6379}"
 BAN_THRESHOLD="${BAN_THRESHOLD:-1000}"      # Bu kadar hit = ban
 CHECK_INTERVAL="${CHECK_INTERVAL:-30}"      # Saniyede bir kontrol
 BAN_TTL="${BAN_TTL:-86400}"                 # Ban suresi (saniye) - varsayilan 24 saat
-# bs:ban:* → ipset tam taramasi (15k+ ban'da her dongu ~1 core). Attack kapali iken seyrek yeter.
-KERNEL_SYNC_INTERVAL="${KERNEL_SYNC_INTERVAL:-60}"
+# bs:ban:* → ipset tam taramasi (15k+ ban'da pahali). added=0 ise seyrek tekrarla.
+KERNEL_SYNC_INTERVAL="${KERNEL_SYNC_INTERVAL:-120}"
+KERNEL_SYNC_INTERVAL_IDLE="${KERNEL_SYNC_INTERVAL_IDLE:-900}"
+PRUNE_INTERVAL="${PRUNE_INTERVAL:-60}"
 HIT_STALE_SEC="${HIT_STALE_SEC:-600}"       # Son gorulme bundan eskiyse "stale"
 HIT_MIN_KEEP="${HIT_MIN_KEEP:-10}"          # Stale + hit < bu → prune
 IPSET_NAME="bs_banned"
@@ -92,14 +94,20 @@ ban_ip() {
 # Engine/JS/GeoIP ban'lari sadece Redis'e yazar → HAProxy TLS sonrasi silent-drop.
 # Kernel'de yoksa CPU yine yanar. Redis bs:ban:* → ipset senkronu (TTL korunur).
 _last_kernel_sync_at=0
+_last_kernel_sync_added=1
+_last_prune_at=0
 sync_redis_bans_to_kernel() {
     local now=$(( $(date +%s) ))
-    if (( now - _last_kernel_sync_at < KERNEL_SYNC_INTERVAL )); then
+    local interval="$KERNEL_SYNC_INTERVAL"
+    if [[ "$_last_kernel_sync_added" -eq 0 ]]; then
+        interval="$KERNEL_SYNC_INTERVAL_IDLE"
+    fi
+    if (( now - _last_kernel_sync_at < interval )); then
         return
     fi
     _last_kernel_sync_at=$now
 
-    local cursor="0" added=0 ip ttl keys key
+    local t0=$now added=0 ip ttl keys key cursor="0"
     while true; do
         # redis-cli SCAN: cursor + optional keys
         local out
@@ -125,16 +133,23 @@ sync_redis_bans_to_kernel() {
         done <<< "$keys"
         [[ "$cursor" == "0" ]] && break
     done
+    _last_kernel_sync_added=$added
+    local elapsed=$(( $(date +%s) - t0 ))
     if [[ "$added" -gt 0 ]]; then
-        log "KERNEL-SYNC: $added Redis ban → ipset (TLS oncesi DROP)"
+        log "KERNEL-SYNC: $added Redis ban → ipset (${elapsed}s, next in ${KERNEL_SYNC_INTERVAL}s)"
+    elif (( elapsed > 30 )); then
+        log "KERNEL-SYNC: 0 yeni (${elapsed}s, ${interval}s aralik — buyuk ban listesi normal)"
     fi
 }
 
 # Dusuk hit + uzun suredir gorulmeyen IP'leri bs:ip_hits / bs:ip_seen'den sil.
-# Aktif saldiri (yuksek hit veya taze seen) dokunulmaz. Redis EVAL — 18k IP'de ucuz.
 prune_stale_hits() {
     local now cutoff removed
     now=$(date +%s)
+    if (( now - _last_prune_at < PRUNE_INTERVAL )); then
+        return
+    fi
+    _last_prune_at=$now
     cutoff=$((now - HIT_STALE_SEC))
     removed=$($REDIS EVAL "
 local cutoff = tonumber(ARGV[1])
@@ -176,7 +191,8 @@ last_reset_day=""
 
 log "BadSector IP Watcher baslatildi"
 log "Esik: $BAN_THRESHOLD hit | Kontrol: ${CHECK_INTERVAL}s | Ban TTL: ${BAN_TTL}s"
-log "Prune: stale>${HIT_STALE_SEC}s AND hit<${HIT_MIN_KEEP}"
+log "Kernel sync: ${KERNEL_SYNC_INTERVAL}s (idle ${KERNEL_SYNC_INTERVAL_IDLE}s) | Prune: ${PRUNE_INTERVAL}s"
+log "Prune stale: >${HIT_STALE_SEC}s AND hit<${HIT_MIN_KEEP}"
 log "Trusted IPs: $TRUSTED_IPS"
 
 # Kernel attack blocks (iptables/ipset — HAProxy oncesi)

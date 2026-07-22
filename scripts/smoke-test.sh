@@ -29,16 +29,26 @@ http_ok() {
   [[ "$code" == "200" ]]
 }
 
+http_code() {
+  curl -s -o /dev/null -w "%{http_code}" "$1"
+}
+
+json_has_sites() {
+  local code
+  code=$(http_code "${API}/api/v1/sites")
+  if [[ "$code" == "401" ]]; then
+    echo "  hint: /api/v1/sites returned 401 — set BADSECTOR_AUTH_DISABLED=true for CI smoke" >&2
+    return 1
+  fi
+  curl -sf "${API}/api/v1/sites" | grep -q '"name"'
+}
+
 http_ok_host() {
   local url="$1"
   local host="$2"
   local code
   code=$(curl -s -o /dev/null -w "%{http_code}" -H "Host: ${host}" "$url")
   [[ "$code" == "200" ]]
-}
-
-json_has_sites() {
-  curl -sf "${API}/api/v1/sites" | grep -q '"name"'
 }
 
 echo "BadSector smoke test"

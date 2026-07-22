@@ -35,6 +35,9 @@ jobs:
         run: docker compose build --pull
 
       - name: Start stack
+        env:
+          # Smoke test hits /api/v1/* without login — CI only.
+          BADSECTOR_AUTH_DISABLED: "true"
         run: docker compose up -d
 
       - name: Wait for services

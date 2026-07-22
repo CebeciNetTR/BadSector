@@ -225,7 +225,9 @@ services:
       BADSECTOR_REDIS_PORT: "6379"
       BAN_THRESHOLD: "300"        # attack altinda daha hizli iptables (eskiden 1000)
       CHECK_INTERVAL: "15"        # daha sik ban/prune
-      KERNEL_SYNC_INTERVAL: "120" # 15k+ ban: bs:ban SCAN/ipset test her 15s degil 120s
+      KERNEL_SYNC_INTERVAL: "120" # bs:ban SCAN/ipset test (yeni ban yoksa seyrek)
+      KERNEL_SYNC_INTERVAL_IDLE: "900" # son sync 0 ekleme → 15 dk
+      PRUNE_INTERVAL: "60"
       BAN_TTL: "7200"             # 2 saat ban (yanlis ban / SSH kilidi riskini dusurur)
       HIT_STALE_SEC: "600"        # 10dk+ gorulmeyen
       HIT_MIN_KEEP: "10"          # stale + hit<10 → bs:ip_hits prune
