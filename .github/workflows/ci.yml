@@ -31,8 +31,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Build and start stack
-        run: docker compose up -d --build
+      - name: Build images
+        run: docker compose build --pull
+
+      - name: Start stack
+        run: docker compose up -d
 
       - name: Wait for services
         run: |

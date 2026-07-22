@@ -1,6 +1,6 @@
 # resty + lua-resty-maxminddb: engine ile ayni MMDB okuyucu (ayri MaxMind indirme yok)
 FROM openresty/openresty:1.25.3.1-alpine AS resty
-RUN apk add --no-cache libmaxminddb perl \
+RUN apk add --no-cache libmaxminddb perl curl git unzip \
     && ln -sf /usr/lib/libmaxminddb.so.0 /usr/lib/libmaxminddb.so \
     && /usr/local/openresty/bin/opm get anjia0532/lua-resty-maxminddb
 

@@ -1,0 +1,13 @@
+.git
+.github
+data/geoip/*
+!data/geoip/.gitkeep
+data/watcher/*
+!data/watcher/.gitkeep
+data/certs
+data/restore
+node_modules
+ui/node_modules
+ui/dist
+runtime
+*.md
