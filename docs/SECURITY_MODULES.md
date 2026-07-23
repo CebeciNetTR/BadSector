@@ -180,20 +180,23 @@ Sets HttpOnly verification cookie on first visit; subsequent requests pass.
 To handle massive DDoS floods without exhausting OpenResty (engine) resources:
 
 1. **HAProxy Lua Ban Check** (`deploy/haproxy/lua/ban_check.lua`): Attack mode açıkken (`bs:attack_mode=1`) bellekteki ban tablosunu okur; banlı IP'leri `silent-drop` eder. Hit sayaçlarını arka planda Redis'e **pipeline batch** ile yazar (80k+ IP flood'da Redis'i boğmamak için).
-2. **IP Watcher** (`deploy/watcher`): `bs:ip_hits` sorted set'ini izler. Eşik aşılınca (`BAN_THRESHOLD`, varsayılan 1000 — kümülatif, gece sıfırlanır) IP'yi **host ipset** (`bs_banned`, `maxelem` 1M) + Redis `bs:ban:<ip>` ile banlar. Ban TTL: `BAN_TTL` (compose varsayılan 7200). `network_mode: host` + `privileged` — iptables host'a yazılır; konteyner dursa bile kural kalır (reboot temizler).
+2. **IP Watcher** (`deploy/watcher`): `bs:ip_hits` sorted set'ini izler. Eşik aşılınca (`BAN_THRESHOLD`, varsayılan 1000 — kümülatif, gece sıfırlanır) IP'yi **host ipset** (`bs_banned`, `maxelem` 1M) + Redis `bs:ban:<ip>` ile banlar. Ban TTL: `BAN_TTL` (compose varsayılan 7200). **Tekrarlayan saldırgan:** 24 saat içinde **3** veya 7 gün içinde **7** ayrı ban olayı → kalıcı ban (`bs_banned_perm`, Redis TTL yok, gece 00:00 flush'tan muaf). Eşikler: `BAN_STRIKES_DAY` / `BAN_STRIKES_WEEK` (engine: `BADSECTOR_BAN_STRIKES_*`). `network_mode: host` + `privileged` — iptables host'a yazılır; konteyner dursa bile kural kalır (reboot temizler).
 3. **Stale prune**: HAProxy flush her IP için `bs:ip_seen` (unix last-seen) yazar. Watcher her turda: `hit < HIT_MIN_KEEP` (10) **ve** son görülme `HIT_STALE_SEC` (600s) eskiyse veya `bs:ip_seen` yoksa → `ZREM`. Aktif / yüksek hit IP’ler kalır.
-4. **Daily Reset**: Gece 00:00'da `bs:ip_hits` + `bs:ip_seen` ve ipset flush. Redis kısa süre erişilemez olsa watcher **crash-loop yapmaz** (`set -e` yok).
+4. **Daily Reset**: Gece 00:00'da `bs:ip_hits` + `bs:ip_seen` ve **geçici** `bs_banned` ipset flush. Kalıcı ban (`bs_banned_perm` + Redis `permanent:*`) korunur. Redis kısa süre erişilemez olsa watcher **crash-loop yapmaz** (`set -e` yok).
 5. **Engine ban cache**: `init.lua` istek başına Redis GET yerine shared-dict negatif cache kullanır; `/badsector/health` Redis'e dokunmaz.
 
 ### Ban kaynağını teşhis
 
 ```bash
 IP=1.2.3.4
-docker compose exec -T redis redis-cli get "bs:ban:$IP"    # "js_challenge" veya "1"
-docker compose exec -T redis redis-cli ttl "bs:ban:$IP"
+docker compose exec -T redis redis-cli get "bs:ban:$IP"    # "js_challenge", "permanent:..." veya "1"
+docker compose exec -T redis redis-cli ttl "bs:ban:$IP"    # -1 = kalici
+docker compose exec -T redis redis-cli get "bs:ban_strikes:day:$IP"
+docker compose exec -T redis redis-cli get "bs:ban_strikes:week:$IP"
 docker compose exec -T redis redis-cli get "bs:js_fail:$IP"
 docker compose exec -T redis redis-cli zscore bs:ip_hits "$IP"
-sudo ipset test bs_banned "$IP"                            # watcher ise burada olur
+sudo ipset test bs_banned "$IP"                            # gecici watcher ban
+sudo ipset test bs_banned_perm "$IP"                       # kalici ban
 docker compose logs --since 2h engine | grep -iE "banland|$IP"
 docker compose logs --since 2h watcher | grep -iE "BANNED|$IP"
 ```

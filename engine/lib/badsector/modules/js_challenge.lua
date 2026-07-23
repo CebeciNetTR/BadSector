@@ -138,7 +138,8 @@ local function record_challenge(ip)
         red:expire(fail_key, 60)
     end
     if count and count >= cfg.ban_threshold then
-        red:setex("bs:ban:" .. ip, cfg.ban_ttl, "js_challenge")
+        local ban_strikes = require("badsector.ban_strikes")
+        ban_strikes.apply_ban(ip, "js_challenge", cfg.ban_ttl)
         ngx.log(ngx.WARN, "badsector: IP " .. ip .. " banlandi (cozumsuz JS challenge x" .. tostring(count) .. ")")
     end
     redis.keepalive(red)

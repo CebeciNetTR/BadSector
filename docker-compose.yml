@@ -145,6 +145,8 @@ services:
       BADSECTOR_TRUSTED_IPS: ${BADSECTOR_TRUSTED_IPS:-}
       # false = edge (spoof kapali). Cloudflare arkasi: true
       BADSECTOR_CLOUDFLARE: ${BADSECTOR_CLOUDFLARE:-false}
+      BADSECTOR_BAN_STRIKES_DAY: ${BAN_STRIKES_DAY:-3}
+      BADSECTOR_BAN_STRIKES_WEEK: ${BAN_STRIKES_WEEK:-7}
     volumes:
       - runtime_config:/etc/badsector/runtime:ro
       - ./data/geoip:/etc/badsector/geoip:ro
@@ -229,6 +231,8 @@ services:
       KERNEL_SYNC_INTERVAL_IDLE: "900" # son sync 0 ekleme → 15 dk
       PRUNE_INTERVAL: "60"
       BAN_TTL: "7200"             # 2 saat ban (yanlis ban / SSH kilidi riskini dusurur)
+      BAN_STRIKES_DAY: "3"        # 24s icinde bu kadar ban → kalici
+      BAN_STRIKES_WEEK: "7"       # 7 gun icinde bu kadar ban → kalici
       HIT_STALE_SEC: "600"        # 10dk+ gorulmeyen
       HIT_MIN_KEEP: "10"          # stale + hit<10 → bs:ip_hits prune
       BADSECTOR_TRUSTED_IPS: ${BADSECTOR_TRUSTED_IPS:-}

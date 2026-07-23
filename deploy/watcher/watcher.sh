@@ -2,7 +2,7 @@
 # BadSector IP Watcher
 # Redis'teki bs:ip_hits sorted set'ini izler.
 # Esigi asan IP'leri iptables (ipset) + Redis ile banlar.
-# Gece 00:00'da hit sayaclarini ve ipset'i temizler.
+# Gece 00:00'da hit sayaclarini ve gecici ipset'i temizler (kalici ban korunur).
 # Stale prune: 10dk+ gormeyen VE hit < HIT_MIN_KEEP → listeden dusur.
 #
 # NOT: Bilincli olarak "set -e" KULLANMIYORUZ. Bu uzun-omurlu bir daemon;
@@ -14,6 +14,9 @@ REDIS_PORT="${BADSECTOR_REDIS_PORT:-6379}"
 BAN_THRESHOLD="${BAN_THRESHOLD:-1000}"      # Bu kadar hit = ban
 CHECK_INTERVAL="${CHECK_INTERVAL:-30}"      # Saniyede bir kontrol
 BAN_TTL="${BAN_TTL:-86400}"                 # Ban suresi (saniye) - varsayilan 24 saat
+# Tekrarlayan saldirgan: 24s icinde BAN_STRIKES_DAY veya 7 gun icinde BAN_STRIKES_WEEK ban → kalici
+BAN_STRIKES_DAY="${BAN_STRIKES_DAY:-3}"
+BAN_STRIKES_WEEK="${BAN_STRIKES_WEEK:-7}"
 # bs:ban:* → ipset tam taramasi (15k+ ban'da pahali). added=0 ise seyrek tekrarla.
 KERNEL_SYNC_INTERVAL="${KERNEL_SYNC_INTERVAL:-120}"
 KERNEL_SYNC_INTERVAL_IDLE="${KERNEL_SYNC_INTERVAL_IDLE:-900}"
@@ -21,6 +24,7 @@ PRUNE_INTERVAL="${PRUNE_INTERVAL:-60}"
 HIT_STALE_SEC="${HIT_STALE_SEC:-600}"       # Son gorulme bundan eskiyse "stale"
 HIT_MIN_KEEP="${HIT_MIN_KEEP:-10}"          # Stale + hit < bu → prune
 IPSET_NAME="bs_banned"
+PERM_IPSET="${PERM_IPSET:-bs_banned_perm}"
 # Virgul ile: asla banlanmaz + iptables ACCEPT. Bos = kimse muaf degil.
 TRUSTED_IPS="${BADSECTOR_TRUSTED_IPS:-}"
 
@@ -55,8 +59,64 @@ ensure_trusted_accept() {
             log "iptables ACCEPT (trusted): $part"
         fi
         ipset del "$IPSET_NAME" "$part" 2>/dev/null || true
+        ipset del "$PERM_IPSET" "$part" 2>/dev/null || true
         $REDIS DEL "bs:ban:$part" > /dev/null 2>&1 || true
+        $REDIS DEL "bs:ban_strikes:day:$part" > /dev/null 2>&1 || true
+        $REDIS DEL "bs:ban_strikes:week:$part" > /dev/null 2>&1 || true
     done
+}
+
+setup_perm_ipset() {
+    if ! ipset list "$PERM_IPSET" &>/dev/null; then
+        ipset create "$PERM_IPSET" hash:ip maxelem 1048576
+        log "ipset '$PERM_IPSET' olusturuldu (kalici ban, timeout yok)"
+    fi
+    if ! iptables -C INPUT -m set --match-set "$PERM_IPSET" src -j DROP 2>/dev/null; then
+        iptables -I INPUT -m set --match-set "$PERM_IPSET" src -j DROP
+        log "iptables kurali eklendi: INPUT -m set --match-set $PERM_IPSET src -j DROP"
+    fi
+}
+
+# Her ban olayinda strike say; esik asilirsa permanent=1 doner.
+# stdout: day week permanent
+record_ban_strike() {
+    local ip="$1"
+    $REDIS --raw EVAL "
+local ip = ARGV[1]
+local day_lim = tonumber(ARGV[2])
+local week_lim = tonumber(ARGV[3])
+local dk = 'bs:ban_strikes:day:' .. ip
+local wk = 'bs:ban_strikes:week:' .. ip
+local day = redis.call('INCR', dk)
+if day == 1 then redis.call('EXPIRE', dk, 86400) end
+local week = redis.call('INCR', wk)
+if week == 1 then redis.call('EXPIRE', wk, 604800) end
+local perm = 0
+if day >= day_lim or week >= week_lim then perm = 1 end
+return {day, week, perm}
+" 0 "$ip" "$BAN_STRIKES_DAY" "$BAN_STRIKES_WEEK" 2>/dev/null | tr -d '\r'
+}
+
+is_permanent_ban_key() {
+    local key="$1"
+    local ttl val
+    ttl=$($REDIS TTL "$key" 2>/dev/null | tr -d '\r')
+    [[ "$ttl" == "-1" ]] && return 0
+    val=$($REDIS GET "$key" 2>/dev/null | tr -d '\r')
+    [[ "$val" == permanent:* ]] && return 0
+    return 1
+}
+
+add_perm_ban_kernel() {
+    local ip="$1"
+    ipset -exist add "$PERM_IPSET" "$ip" 2>/dev/null || true
+    ipset del "$IPSET_NAME" "$ip" 2>/dev/null || true
+}
+
+add_temp_ban_kernel() {
+    local ip="$1"
+    local ttl="${2:-$BAN_TTL}"
+    ipset -exist add "$IPSET_NAME" "$ip" timeout "$ttl" 2>/dev/null
 }
 
 setup_ipset() {
@@ -74,18 +134,36 @@ setup_ipset() {
     fi
 
     ensure_trusted_accept
+    setup_perm_ipset
 }
 
 ban_ip() {
     local ip="$1"
+    local reason="${2:-watcher}"
     if is_trusted "$ip"; then
         log "SKIP ban (trusted): $ip"
         return
     fi
-    # -exist onde: zaten listedeyse hata verme; Redis ban yine yenilenir
-    if ipset -exist add "$IPSET_NAME" "$ip" timeout "$BAN_TTL" 2>/dev/null; then
-        $REDIS SETEX "bs:ban:$ip" "$BAN_TTL" "1" > /dev/null
-        log "BANNED: $ip | iptables + Redis | TTL: ${BAN_TTL}s"
+
+    local strike_out day week permanent
+    strike_out=$(record_ban_strike "$ip")
+    day=$(echo "$strike_out" | awk 'NR==1{print $1}')
+    week=$(echo "$strike_out" | awk 'NR==2{print $1}')
+    permanent=$(echo "$strike_out" | awk 'NR==3{print $1}')
+    [[ -z "$day" || ! "$day" =~ ^[0-9]+$ ]] && day=0
+    [[ -z "$week" || ! "$week" =~ ^[0-9]+$ ]] && week=0
+    [[ -z "$permanent" ]] && permanent=0
+
+    if [[ "$permanent" == "1" ]]; then
+        add_perm_ban_kernel "$ip"
+        $REDIS SET "bs:ban:$ip" "permanent:$reason" > /dev/null
+        log "PERMA-BANNED: $ip | strikes day=$day week=$week | $PERM_IPSET + Redis (TTL yok)"
+        return
+    fi
+
+    if add_temp_ban_kernel "$ip" "$BAN_TTL"; then
+        $REDIS SETEX "bs:ban:$ip" "$BAN_TTL" "$reason" > /dev/null
+        log "BANNED: $ip | strikes day=$day week=$week | TTL: ${BAN_TTL}s"
     else
         log "WARN: ipset add failed: $ip"
     fi
@@ -122,9 +200,21 @@ sync_redis_bans_to_kernel() {
             if [[ ! "$ip" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]] && [[ ! "$ip" =~ : ]]; then
                 continue
             fi
+            if is_permanent_ban_key "$key"; then
+                if ! ipset test "$PERM_IPSET" "$ip" 2>/dev/null; then
+                    if ipset add "$PERM_IPSET" "$ip" 2>/dev/null; then
+                        added=$((added + 1))
+                        ipset del "$IPSET_NAME" "$ip" 2>/dev/null || true
+                    fi
+                fi
+                continue
+            fi
             ttl=$($REDIS TTL "$key" 2>/dev/null | tr -d '\r')
             [[ -z "$ttl" || "$ttl" -lt 1 ]] && ttl="$BAN_TTL"
             if ipset test "$IPSET_NAME" "$ip" 2>/dev/null; then
+                continue
+            fi
+            if ipset test "$PERM_IPSET" "$ip" 2>/dev/null; then
                 continue
             fi
             if ipset add "$IPSET_NAME" "$ip" timeout "$ttl" 2>/dev/null; then
@@ -178,8 +268,8 @@ daily_reset() {
     $REDIS DEL bs:ip_hits bs:ip_seen > /dev/null
     log "Redis bs:ip_hits + bs:ip_seen sifirlandi"
 
-    # ipset'i temizle (yeni olustur)
-    ipset flush "$IPSET_NAME" 2>/dev/null && log "ipset '$IPSET_NAME' temizlendi"
+    # Gecici ban ipset'i temizle — kalici ban (bs_banned_perm) dokunulmaz
+    ipset flush "$IPSET_NAME" 2>/dev/null && log "ipset '$IPSET_NAME' temizlendi (kalici '$PERM_IPSET' korundu)"
 
     ensure_trusted_accept
 
@@ -191,6 +281,7 @@ last_reset_day=""
 
 log "BadSector IP Watcher baslatildi"
 log "Esik: $BAN_THRESHOLD hit | Kontrol: ${CHECK_INTERVAL}s | Ban TTL: ${BAN_TTL}s"
+log "Kalici ban: >=${BAN_STRIKES_DAY}/24s veya >=${BAN_STRIKES_WEEK}/7d strike → $PERM_IPSET"
 log "Kernel sync: ${KERNEL_SYNC_INTERVAL}s (idle ${KERNEL_SYNC_INTERVAL_IDLE}s) | Prune: ${PRUNE_INTERVAL}s"
 log "Prune stale: >${HIT_STALE_SEC}s AND hit<${HIT_MIN_KEEP}"
 log "Trusted IPs: $TRUSTED_IPS"

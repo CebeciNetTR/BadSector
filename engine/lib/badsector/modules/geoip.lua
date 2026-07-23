@@ -174,12 +174,8 @@ local function record_challenge_fail(ip)
         red:expire(fail_key, 60)
     end
     if count and count >= cfg.ban_threshold then
-        red:setex("bs:ban:" .. ip, cfg.ban_ttl, "geoip_challenge")
-        -- Ban cache hemen gorsun
-        local dict = ngx.shared.badsector_bans
-        if dict then
-            dict:set(ip, 1, 30)
-        end
+        local ban_strikes = require("badsector.ban_strikes")
+        ban_strikes.apply_ban(ip, "geoip_challenge", cfg.ban_ttl)
         ngx.log(ngx.WARN, "badsector: IP " .. ip
             .. " banlandi (GeoIP challenge fail x" .. tostring(count) .. ")")
     end

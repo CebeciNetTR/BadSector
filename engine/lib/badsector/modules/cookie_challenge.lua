@@ -62,8 +62,9 @@ function M.run(ctx, config)
             red:expire(fail_key, 60)
         end
         if count and count > 2 then
-            red:setex("bs:ban:" .. ip, 86400, "1")
-            ngx.log(ngx.WARN, "badsector: IP " .. ip .. " banned for 24 hours due to cookie challenge failure")
+            local ban_strikes = require("badsector.ban_strikes")
+            ban_strikes.apply_ban(ip, "cookie_challenge", 86400)
+            ngx.log(ngx.WARN, "badsector: IP " .. ip .. " banned due to cookie challenge failure")
         end
         redis.keepalive(red)
     end
