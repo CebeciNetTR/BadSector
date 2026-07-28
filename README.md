@@ -77,11 +77,11 @@ See [CHANGELOG.md](CHANGELOG.md) for release notes.
 ```bash
 # GitHub'a ilk push (Git Bash)
 git init && git add . && git commit -m "Initial commit"
-git remote add origin https://github.com/KULLANICI_ADINIZ/BadSector.git
+git remote add origin https://github.com/CebeciNetTR/BadSector.git
 git push -u origin main
 
 # Sunucuda kurulum
-sudo git clone https://github.com/KULLANICI_ADINIZ/BadSector.git /opt/badsector
+sudo git clone https://github.com/CebeciNetTR/BadSector.git /opt/badsector
 cd /opt/badsector && cp .env.example .env && nano .env
 sudo ./scripts/install-server.sh /opt/badsector
 ```

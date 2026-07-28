@@ -2,19 +2,15 @@
 # First-time push to GitHub (run in Git Bash from project root)
 #
 # Usage:
-#   ./scripts/first-push.sh YOUR_GITHUB_USERNAME
+#   ./scripts/first-push.sh
+#   ./scripts/first-push.sh CebeciNetTR
 #
 # Example:
-#   ./scripts/first-push.sh miroglu
+#   ./scripts/first-push.sh CebeciNetTR
 
 set -euo pipefail
 
-USER="${1:-}"
-if [ -z "${USER}" ]; then
-  echo "Usage: $0 GITHUB_USERNAME"
-  echo "Example: $0 miroglu"
-  exit 1
-fi
+USER="${1:-CebeciNetTR}"
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "${ROOT}"

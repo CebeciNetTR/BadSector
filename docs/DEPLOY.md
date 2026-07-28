@@ -30,18 +30,18 @@ git init
 git add .
 git commit -m "Initial commit: BadSector edge security platform"
 git branch -M main
-git remote add origin https://github.com/KULLANICI_ADINIZ/BadSector.git
+git remote add origin https://github.com/CebeciNetTR/BadSector.git
 git push -u origin main
 ```
 
-`KULLANICI_ADINIZ` yerine kendi GitHub kullanıcı adınızı yazın.
+Repo: `https://github.com/CebeciNetTR/BadSector`
 
 > **Önemli:** `.env` dosyası `.gitignore` içinde — commit edilmez. Sadece `.env.example` gider.
 
 ### SSH ile push (opsiyonel)
 
 ```bash
-git remote set-url origin git@github.com:KULLANICI_ADINIZ/BadSector.git
+git remote set-url origin git@github.com:CebeciNetTR/BadSector.git
 git push -u origin main
 ```
 
@@ -78,7 +78,7 @@ Compose varsayılanları (24GB): Redis `maxmemory 2gb`, Postgres `shared_buffers
 ```bash
 sudo apt update && sudo apt install -y git curl
 
-sudo git clone https://github.com/KULLANICI_ADINIZ/BadSector.git /opt/badsector
+sudo git clone https://github.com/CebeciNetTR/BadSector.git /opt/badsector
 cd /opt/badsector
 sudo cp .env.example .env
 sudo nano .env          # secrets — aşağıya bakın
@@ -87,11 +87,38 @@ sudo ./scripts/install-server.sh /opt/badsector
 bash scripts/install-server.sh /opt/badsector
 ```
 
+### Yöntem A2 — Ubuntu 22.04 hızlı kurulum (önerilen, yeni VPS)
+
+Tek script: Docker, sysctl, `.env` (rastgele secret), GeoIP (MaxMind key varsa), `compose up -d --build`.
+
+```bash
+sudo apt update && sudo apt install -y git curl
+sudo git clone https://github.com/CebeciNetTR/BadSector.git /opt/badsector
+cd /opt/badsector
+
+# Opsiyonel ortam (kurulumdan once):
+export BADSECTOR_TRUSTED_IPS="203.0.113.10"
+export MAXMIND_LICENSE_KEY="your_key"
+export BADSECTOR_ACME_EMAIL="admin@sizindomain.com"
+
+sudo bash scripts/quick-install-ubuntu22.sh
+```
+
+Tek satır (repo public):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/CebeciNetTR/BadSector/main/scripts/quick-install-ubuntu22.sh \
+  | sudo BADSECTOR_REPO=https://github.com/CebeciNetTR/BadSector.git \
+         BADSECTOR_TRUSTED_IPS="203.0.113.10" bash
+```
+
+Kurulum sonrası panel şifresi ekranda bir kez gösterilir; ayrıca `/opt/badsector/.env` içinde `BADSECTOR_ADMIN_PASSWORD`.
+
 ### Yöntem B — curl ile (repo public ise)
 
 ```bash
-export BADSECTOR_REPO=https://github.com/KULLANICI_ADINIZ/BadSector.git
-curl -fsSL https://raw.githubusercontent.com/KULLANICI_ADINIZ/BadSector/main/scripts/install-server.sh | sudo bash
+export BADSECTOR_REPO=https://github.com/CebeciNetTR/BadSector.git
+curl -fsSL https://raw.githubusercontent.com/CebeciNetTR/BadSector/main/scripts/install-server.sh | sudo bash
 ```
 
 ---
