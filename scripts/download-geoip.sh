@@ -4,6 +4,11 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 KEY="${MAXMIND_LICENSE_KEY:-}"
 
+# .env otomatik (export etmeden calistirildiysa)
+if [[ -z "${KEY}" && -f "${ROOT}/.env" ]]; then
+  KEY=$(grep -E '^MAXMIND_LICENSE_KEY=' "${ROOT}/.env" 2>/dev/null | tail -1 | cut -d= -f2- | tr -d '\r' | sed -e 's/^["'\'' ]*//' -e 's/["'\'' ]*$//')
+fi
+
 if [[ -z "${KEY}" ]]; then
   echo "MAXMIND_LICENSE_KEY is required."
   echo "Free key: https://www.maxmind.com/en/geolite2/signup"
